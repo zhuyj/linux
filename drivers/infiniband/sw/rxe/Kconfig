@@ -25,3 +25,15 @@ config RDMA_RXE
 	following wiki page under "configure Soft-RoCE (RXE)" section:
 
 	https://github.com/linux-rdma/rdma-core/blob/master/Documentation/rxe.md
+
+config RDMA_RXE_L2
+	bool "Soft RoCE over Ethernet Layer"
+	depends on RDMA_RXE
+	help
+	Software RoCE is still a routeable RoCE. In driver, the src/dst mac
+	addresses are added to skb. So it is unnecessary to make route table
+	lookup. And this skb can be directly sent to Ethernet adapter. This
+	brings 2 benefits:
+	1. avoid making route table lookup;
+	2. avoid other operations in IP layer;
+	This can enhance the throughput and lower the latency.
