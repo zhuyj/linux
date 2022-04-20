@@ -72,6 +72,8 @@ static void rxe_init_device_param(struct rxe_dev *rxe)
 			rxe->ndev->dev_addr);
 
 	rxe->max_ucontext			= RXE_MAX_UCONTEXT;
+	rxe->attr.device_cap_flags 		|= IB_DEVICE_ON_DEMAND_PAGING;
+	rxe_internal_fill_odp_caps(rxe);
 }
 
 /* initialize port attributes */

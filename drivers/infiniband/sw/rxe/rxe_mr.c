@@ -173,6 +173,12 @@ int rxe_mr_init_user(struct rxe_pd *pd, u64 start, u64 length, u64 iova,
 	void			*vaddr;
 	int err;
 
+	/*
+	 * To support ODP, remove ODP flag
+	*/
+	if (access & IB_ACCESS_ON_DEMAND)
+		access &= (~IB_ACCESS_ON_DEMAND);
+
 	umem = ib_umem_get(pd->ibpd.device, start, length, access);
 	if (IS_ERR(umem)) {
 		pr_warn("%s: Unable to pin memory region err = %d\n",
