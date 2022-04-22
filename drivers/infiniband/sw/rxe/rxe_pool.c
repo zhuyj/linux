@@ -138,8 +138,8 @@ void *rxe_alloc(struct rxe_pool *pool)
 	elem->obj = obj;
 	kref_init(&elem->ref_cnt);
 
-	err = xa_alloc_cyclic(&pool->xa, &elem->index, elem, pool->limit,
-			      &pool->next, GFP_KERNEL);
+	err = xa_alloc_cyclic_irq(&pool->xa, &elem->index, elem, pool->limit,
+				  &pool->next, GFP_KERNEL);
 	if (err)
 		goto err_free;
 
