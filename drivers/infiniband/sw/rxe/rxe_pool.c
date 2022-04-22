@@ -106,7 +106,7 @@ void rxe_pool_init(struct rxe_dev *rxe, struct rxe_pool *pool,
 
 	atomic_set(&pool->num_elem, 0);
 
-	xa_init_flags(&pool->xa, XA_FLAGS_ALLOC);
+	xa_init_flags(&pool->xa, XA_FLAGS_ALLOC | XA_FLAGS_LOCK_IRQ);
 	pool->limit.min = info->min_index;
 	pool->limit.max = info->max_index;
 }
@@ -155,6 +155,7 @@ err_cnt:
 int __rxe_add_to_pool(struct rxe_pool *pool, struct rxe_pool_elem *elem)
 {
 	int err;
+	unsigned long flags;
 
 	if (WARN_ON(pool->flags & RXE_POOL_ALLOC))
 		return -EINVAL;
@@ -166,8 +167,10 @@ int __rxe_add_to_pool(struct rxe_pool *pool, struct rxe_pool_elem *elem)
 	elem->obj = (u8 *)elem - pool->elem_offset;
 	kref_init(&elem->ref_cnt);
 
-	err = xa_alloc_cyclic(&pool->xa, &elem->index, elem, pool->limit,
-			      &pool->next, GFP_KERNEL);
+	xa_lock_irqsave(&pool->xa, flags);
+	err = __xa_alloc_cyclic(&pool->xa, &elem->index, elem, pool->limit,
+				&pool->next, GFP_ATOMIC);
+	xa_unlock_irqrestore(&pool->xa, flags);
 	if (err)
 		goto err_cnt;
 
@@ -201,7 +204,7 @@ static void rxe_elem_release(struct kref *kref)
 	struct rxe_pool_elem *elem = container_of(kref, typeof(*elem), ref_cnt);
 	struct rxe_pool *pool = elem->pool;
 
-	xa_erase(&pool->xa, elem->index);
+	xa_erase_irq(&pool->xa, elem->index);
 
 	if (pool->cleanup)
 		pool->cleanup(elem);
