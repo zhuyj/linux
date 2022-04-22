@@ -155,7 +155,6 @@ err_cnt:
 int __rxe_add_to_pool(struct rxe_pool *pool, struct rxe_pool_elem *elem)
 {
 	int err;
-	unsigned long flags;
 
 	if (WARN_ON(pool->flags & RXE_POOL_ALLOC))
 		return -EINVAL;
@@ -167,10 +166,17 @@ int __rxe_add_to_pool(struct rxe_pool *pool, struct rxe_pool_elem *elem)
 	elem->obj = (u8 *)elem - pool->elem_offset;
 	kref_init(&elem->ref_cnt);
 
-	xa_lock_irqsave(&pool->xa, flags);
-	err = __xa_alloc_cyclic(&pool->xa, &elem->index, elem, pool->limit,
-				&pool->next, GFP_ATOMIC);
-	xa_unlock_irqrestore(&pool->xa, flags);
+	if (pool->type == RXE_TYPE_AH) {
+		unsigned long flags;
+
+		xa_lock_irqsave(&pool->xa, flags);
+		err = __xa_alloc_cyclic(&pool->xa, &elem->index, elem, pool->limit,
+					&pool->next, GFP_ATOMIC);
+		xa_unlock_irqrestore(&pool->xa, flags);
+	} else {
+		err = xa_alloc_cyclic_irq(&pool->xa, &elem->index, elem, pool->limit,
+					  &pool->next, GFP_KERNEL);
+	}
 	if (err)
 		goto err_cnt;
 
