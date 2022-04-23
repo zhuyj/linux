@@ -152,7 +152,7 @@ err_cnt:
 	return NULL;
 }
 
-int __rxe_add_to_pool(struct rxe_pool *pool, struct rxe_pool_elem *elem)
+int __rxe_add_to_pool(struct rxe_pool *pool, struct rxe_pool_elem *elem, gfp_t gfp)
 {
 	int err;
 
@@ -166,16 +166,18 @@ int __rxe_add_to_pool(struct rxe_pool *pool, struct rxe_pool_elem *elem)
 	elem->obj = (u8 *)elem - pool->elem_offset;
 	kref_init(&elem->ref_cnt);
 
-	if (pool->type == RXE_TYPE_AH) {
+	if (gfp & GFP_ATOMIC) {
 		unsigned long flags;
 
 		xa_lock_irqsave(&pool->xa, flags);
-		err = __xa_alloc_cyclic(&pool->xa, &elem->index, elem, pool->limit,
-					&pool->next, GFP_ATOMIC);
+		err = __xa_alloc_cyclic(&pool->xa, &elem->index, elem,
+					pool->limit, &pool->next,
+					GFP_ATOMIC);
 		xa_unlock_irqrestore(&pool->xa, flags);
 	} else {
-		err = xa_alloc_cyclic_irq(&pool->xa, &elem->index, elem, pool->limit,
-					  &pool->next, GFP_KERNEL);
+		err = xa_alloc_cyclic_irq(&pool->xa, &elem->index, elem,
+					  pool->limit, &pool->next,
+					  GFP_KERNEL);
 	}
 	if (err)
 		goto err_cnt;

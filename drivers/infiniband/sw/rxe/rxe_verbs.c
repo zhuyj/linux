@@ -108,7 +108,7 @@ static int rxe_alloc_ucontext(struct ib_ucontext *ibuc, struct ib_udata *udata)
 	struct rxe_dev *rxe = to_rdev(ibuc->device);
 	struct rxe_ucontext *uc = to_ruc(ibuc);
 
-	return rxe_add_to_pool(&rxe->uc_pool, uc);
+	return rxe_add_to_pool(&rxe->uc_pool, uc, GFP_KERNEL);
 }
 
 static void rxe_dealloc_ucontext(struct ib_ucontext *ibuc)
@@ -142,7 +142,7 @@ static int rxe_alloc_pd(struct ib_pd *ibpd, struct ib_udata *udata)
 	struct rxe_dev *rxe = to_rdev(ibpd->device);
 	struct rxe_pd *pd = to_rpd(ibpd);
 
-	return rxe_add_to_pool(&rxe->pd_pool, pd);
+	return rxe_add_to_pool(&rxe->pd_pool, pd, GFP_KERNEL);
 }
 
 static int rxe_dealloc_pd(struct ib_pd *ibpd, struct ib_udata *udata)
@@ -162,6 +162,7 @@ static int rxe_create_ah(struct ib_ah *ibah,
 	struct rxe_ah *ah = to_rah(ibah);
 	struct rxe_create_ah_resp __user *uresp = NULL;
 	int err;
+	gfp_t gfp;
 
 	if (udata) {
 		/* test if new user provider */
@@ -176,7 +177,12 @@ static int rxe_create_ah(struct ib_ah *ibah,
 	if (err)
 		return err;
 
-	err = rxe_add_to_pool(&rxe->ah_pool, ah);
+	if (init_attr->flags & RDMA_CREATE_AH_SLEEPABLE)
+		gfp = GFP_KERNEL;
+	else
+		gfp = GFP_ATOMIC;
+
+	err = rxe_add_to_pool(&rxe->ah_pool, ah, gfp);
 	if (err)
 		return err;
 
@@ -299,7 +305,7 @@ static int rxe_create_srq(struct ib_srq *ibsrq, struct ib_srq_init_attr *init,
 	if (err)
 		goto err1;
 
-	err = rxe_add_to_pool(&rxe->srq_pool, srq);
+	err = rxe_add_to_pool(&rxe->srq_pool, srq, GFP_KERNEL);
 	if (err)
 		goto err1;
 
@@ -431,7 +437,7 @@ static int rxe_create_qp(struct ib_qp *ibqp, struct ib_qp_init_attr *init,
 		qp->is_user = false;
 	}
 
-	err = rxe_add_to_pool(&rxe->qp_pool, qp);
+	err = rxe_add_to_pool(&rxe->qp_pool, qp, GFP_KERNEL);
 	if (err)
 		return err;
 
@@ -800,7 +806,7 @@ static int rxe_create_cq(struct ib_cq *ibcq, const struct ib_cq_init_attr *attr,
 	if (err)
 		return err;
 
-	return rxe_add_to_pool(&rxe->cq_pool, cq);
+	return rxe_add_to_pool(&rxe->cq_pool, cq, GFP_KERNEL);
 }
 
 static int rxe_destroy_cq(struct ib_cq *ibcq, struct ib_udata *udata)

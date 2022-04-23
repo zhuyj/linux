@@ -14,7 +14,7 @@ int rxe_alloc_mw(struct ib_mw *ibmw, struct ib_udata *udata)
 
 	rxe_get(pd);
 
-	ret = rxe_add_to_pool(&rxe->mw_pool, mw);
+	ret = rxe_add_to_pool(&rxe->mw_pool, mw, GFP_KERNEL);
 	if (ret) {
 		rxe_put(pd);
 		return ret;
