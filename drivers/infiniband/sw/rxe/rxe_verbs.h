@@ -399,7 +399,6 @@ struct rxe_dev {
 	struct rxe_pool		qp_pool;
 	struct rxe_pool		cq_pool;
 	struct rxe_pool		mr_pool;
-	struct rxe_pool		odp_pool;
 	struct rxe_pool		mw_pool;
 	struct rxe_pool		mc_grp_pool;
 	struct rxe_pool		mc_elem_pool;
@@ -414,7 +413,6 @@ struct rxe_dev {
 
 	struct rxe_port		port;
 	struct crypto_shash	*tfm;
-	bool			is_odp;
 };
 
 static inline void rxe_counter_inc(struct rxe_dev *rxe, enum rxe_counters index)
