@@ -567,7 +567,10 @@ struct rxe_mr *lookup_mr(struct rxe_pd *pd, int access, u32 key,
 	struct rxe_dev *rxe = to_rdev(pd->ibpd.device);
 	int index = key >> 8;
 
-	mr = rxe_pool_get_index(&rxe->mr_pool, index);
+	if (rxe->is_odp)
+		mr = rxe_pool_get_index(&rxe->odp_pool, index);
+	else
+		mr = rxe_pool_get_index(&rxe->mr_pool, index);
 	if (!mr)
 		return NULL;
 
@@ -588,7 +591,10 @@ int rxe_invalidate_mr(struct rxe_qp *qp, u32 rkey)
 	struct rxe_mr *mr;
 	int ret;
 
-	mr = rxe_pool_get_index(&rxe->mr_pool, rkey >> 8);
+	if (rxe->is_odp)
+		mr = rxe_pool_get_index(&rxe->odp_pool, rkey >> 8);
+	else
+		mr = rxe_pool_get_index(&rxe->mr_pool, rkey >> 8);
 	if (!mr) {
 		pr_err("%s: No MR for rkey %#x\n", __func__, rkey);
 		ret = -EINVAL;

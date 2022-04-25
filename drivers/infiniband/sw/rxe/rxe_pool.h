@@ -21,6 +21,7 @@ enum rxe_elem_type {
 	RXE_TYPE_QP,
 	RXE_TYPE_CQ,
 	RXE_TYPE_MR,
+	RXE_TYPE_ODP,
 	RXE_TYPE_MW,
 	RXE_TYPE_MC_GRP,
 	RXE_TYPE_MC_ELEM,
