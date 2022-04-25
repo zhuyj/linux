@@ -72,15 +72,6 @@ static const struct rxe_type_info {
 		.min_index	= RXE_MIN_MR_INDEX,
 		.max_index	= RXE_MAX_MR_INDEX,
 	},
-	[RXE_TYPE_ODP] = {
-		.name		= "rxe-odp",
-		.size		= sizeof(struct rxe_mr),
-		.elem_offset	= offsetof(struct rxe_mr, elem),
-		.cleanup	= rxe_mr_cleanup,
-		.flags		= RXE_POOL_INDEX,
-		.min_index	= RXE_MIN_MR_INDEX,
-		.max_index	= RXE_MAX_MR_INDEX,
-	},
 	[RXE_TYPE_MW] = {
 		.name		= "rxe-mw",
 		.size		= sizeof(struct rxe_mw),

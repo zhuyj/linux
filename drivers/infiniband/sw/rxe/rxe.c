@@ -27,7 +27,6 @@ void rxe_dealloc(struct ib_device *ib_dev)
 	rxe_pool_cleanup(&rxe->qp_pool);
 	rxe_pool_cleanup(&rxe->cq_pool);
 	rxe_pool_cleanup(&rxe->mr_pool);
-	rxe_pool_cleanup(&rxe->odp_pool);
 	rxe_pool_cleanup(&rxe->mw_pool);
 	rxe_pool_cleanup(&rxe->mc_grp_pool);
 	rxe_pool_cleanup(&rxe->mc_elem_pool);
@@ -171,15 +170,8 @@ static int rxe_init_pools(struct rxe_dev *rxe)
 	if (err)
 		goto err10;
 
-	err = rxe_pool_init(rxe, &rxe->odp_pool, RXE_TYPE_ODP,
-			    rxe->attr.max_mr);
-	if (err)
-		goto err11;
-
 	return 0;
 
-err11:
-	rxe_pool_cleanup(&rxe->mc_elem_pool);
 err10:
 	rxe_pool_cleanup(&rxe->mc_grp_pool);
 err9:

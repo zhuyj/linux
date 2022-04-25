@@ -894,10 +894,7 @@ static struct ib_mr *rxe_get_dma_mr(struct ib_pd *ibpd, int access)
 	struct rxe_pd *pd = to_rpd(ibpd);
 	struct rxe_mr *mr;
 
-	if (rxe->is_odp)
-		mr = rxe_alloc(&rxe->odp_pool);
-	else
-		mr = rxe_alloc(&rxe->mr_pool);
+	mr = rxe_alloc(&rxe->mr_pool);
 	if (!mr)
 		return ERR_PTR(-ENOMEM);
 
@@ -919,12 +916,7 @@ static struct ib_mr *rxe_reg_user_mr(struct ib_pd *ibpd,
 	struct rxe_pd *pd = to_rpd(ibpd);
 	struct rxe_mr *mr;
 
-	if (access & IB_ACCESS_ON_DEMAND) {
-		mr = rxe_alloc(&rxe->odp_pool);
-		rxe->is_odp = true;
-	} else {
-		mr = rxe_alloc(&rxe->mr_pool);
-	}
+	mr = rxe_alloc(&rxe->mr_pool);
 	if (!mr) {
 		err = -ENOMEM;
 		goto err2;
@@ -959,10 +951,7 @@ static struct ib_mr *rxe_alloc_mr(struct ib_pd *ibpd, enum ib_mr_type mr_type,
 	if (mr_type != IB_MR_TYPE_MEM_REG)
 		return ERR_PTR(-EINVAL);
 
-	if (rxe->is_odp)
-		mr = rxe_alloc(&rxe->odp_pool);
-	else
-		mr = rxe_alloc(&rxe->mr_pool);
+	mr = rxe_alloc(&rxe->mr_pool);
 	if (!mr) {
 		err = -ENOMEM;
 		goto err1;

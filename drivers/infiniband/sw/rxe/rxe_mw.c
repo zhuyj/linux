@@ -209,10 +209,7 @@ int rxe_bind_mw(struct rxe_qp *qp, struct rxe_send_wqe *wqe)
 	}
 
 	if (likely(wqe->wr.wr.mw.length)) {
-		if (rxe->is_odp)
-			mr = rxe_pool_get_index(&rxe->odp_pool, mr_lkey >> 8);
-		else
-			mr = rxe_pool_get_index(&rxe->mr_pool, mr_lkey >> 8);
+		mr = rxe_pool_get_index(&rxe->mr_pool, mr_lkey >> 8);
 		if (unlikely(!mr)) {
 			ret = -EINVAL;
 			goto err_drop_mw;
