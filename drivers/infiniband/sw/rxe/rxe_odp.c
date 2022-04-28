@@ -203,26 +203,27 @@ static void destroy_unused_implicit_child_mr(struct mlx5_ib_mr *mr)
 	INIT_WORK(&mr->odp_destroy.work, free_implicit_child_mr_work);
 	queue_work(system_unbound_wq, &mr->odp_destroy.work);
 }
-
-static bool mlx5_ib_invalidate_range(struct mmu_interval_notifier *mni,
+#endif
+static bool rxe_ib_invalidate_range(struct mmu_interval_notifier *mni,
 				     const struct mmu_notifier_range *range,
 				     unsigned long cur_seq)
 {
 	struct ib_umem_odp *umem_odp =
 		container_of(mni, struct ib_umem_odp, notifier);
-	struct mlx5_ib_mr *mr;
-	const u64 umr_block_mask = (MLX5_UMR_MTT_ALIGNMENT /
-				    sizeof(struct mlx5_mtt)) - 1;
+	struct rxe_mr *mr;
+//	const u64 umr_block_mask = (MLX5_UMR_MTT_ALIGNMENT /
+//				    sizeof(struct mlx5_mtt)) - 1;
 	u64 idx = 0, blk_start_idx = 0;
 	u64 invalidations = 0;
-	unsigned long start;
-	unsigned long end;
+	unsigned long start = 0;
+	unsigned long end = 0;
 	int in_block = 0;
-	u64 addr;
+	u64 addr = 0;
 
 	if (!mmu_notifier_range_blockable(range))
 		return false;
-
+	pr_info("file: %s +%d, npages:%d, caller:%pS\n", __FILE__, __LINE__, umem_odp->npages, __builtin_return_address(0));
+#if 0
 	mutex_lock(&umem_odp->umem_mutex);
 	mmu_interval_set_seq(mni, cur_seq);
 	/*
@@ -291,13 +292,15 @@ static bool mlx5_ib_invalidate_range(struct mmu_interval_notifier *mni,
 		destroy_unused_implicit_child_mr(mr);
 out:
 	mutex_unlock(&umem_odp->umem_mutex);
-	return true;
+#endif
+	pr_info("file: %s +%d, caller:%pS\n", __FILE__, __LINE__, __builtin_return_address(0));
+	return false;
 }
 
-const struct mmu_interval_notifier_ops mlx5_mn_ops = {
-	.invalidate = mlx5_ib_invalidate_range,
+const struct mmu_interval_notifier_ops rxe_mn_ops = {
+	.invalidate = rxe_ib_invalidate_range,
 };
-#endif
+
 void rxe_internal_fill_odp_caps(struct rxe_dev *dev)
 {
 	struct ib_odp_caps *caps = &dev->attr.odp_caps;
