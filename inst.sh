@@ -7,3 +7,7 @@ cp drivers/infiniband/sw/rxe//rdma_rxe.ko /lib/modules/`uname -r`/updates/driver
 depmod -a
 dracut -f
 modinfo rdma_rxe
+rdma link del rxe0
+modprobe -v -r rdma_rxe && modprobe -v rdma_rxe
+rdma link add rxe0 type rxe netdev eno8403
+rdma link
