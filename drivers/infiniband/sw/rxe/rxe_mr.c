@@ -6,6 +6,7 @@
 
 #include "rxe.h"
 #include "rxe_loc.h"
+#include <rdma/ib_umem_odp.h>
 
 /* Return a random 8 bit key value that is
  * different than the last_key. Set last_key to -1
@@ -176,8 +177,11 @@ int rxe_mr_init_user(struct rxe_pd *pd, u64 start, u64 length, u64 iova,
 	/*
 	 * To support ODP, remove ODP flag
 	*/
-	if (access & IB_ACCESS_ON_DEMAND)
-		access &= (~IB_ACCESS_ON_DEMAND);
+	if (access & IB_ACCESS_ON_DEMAND) {
+		return rxe_create_user_odp_mr(&pd->ibpd, start, length,
+					      iova, access, mr);
+		//access &= (~IB_ACCESS_ON_DEMAND);
+	}
 
 	umem = ib_umem_get(pd->ibpd.device, start, length, access);
 	if (IS_ERR(umem)) {
@@ -269,6 +273,34 @@ int rxe_mr_init_fast(struct rxe_pd *pd, int max_pages, struct rxe_mr *mr)
 
 err1:
 	return err;
+}
+
+extern struct mmu_interval_notifier_ops rxe_mn_ops;
+
+int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
+					    u64 iova, int access,
+					    struct rxe_mr *mr)
+{
+	struct ib_umem_odp *odp;
+	struct rxe_dev *rxe = to_rdev(pd->device);
+
+	if (!IS_ENABLED(CONFIG_INFINIBAND_ON_DEMAND_PAGING))
+		return -EOPNOTSUPP;
+
+	odp = ib_umem_odp_get(&rxe->ib_dev, start, length, access, &rxe_mn_ops);
+	if (IS_ERR(odp))
+		return PTR_ERR(odp);
+
+	mr->ibmr.pd = pd;
+	mr->map_shift = ilog2(RXE_BUF_PER_MAP);
+	mr->umem = &odp->umem;
+	mr->access = access;
+	mr->state = RXE_MR_STATE_VALID;
+	mr->type = IB_MR_TYPE_USER;
+
+	odp->private = mr;
+	pr_info("file %s +%d, %s, %pS\n", __FILE__, __LINE__, __func__, __builtin_return_address(0));
+	return 0;
 }
 
 static void lookup_iova(struct rxe_mr *mr, u64 iova, int *m_out, int *n_out,
