@@ -7,6 +7,7 @@
 #include "rxe.h"
 #include "rxe_loc.h"
 #include <rdma/ib_umem_odp.h>
+#include <linux/sched/mm.h>
 
 /* Return a random 8 bit key value that is
  * different than the last_key. Set last_key to -1
@@ -283,6 +284,17 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 {
 	struct ib_umem_odp *odp;
 	struct rxe_dev *rxe = to_rdev(pd->device);
+	struct rxe_map_set      *set;
+	struct rxe_map          **map;
+	struct page **page_list;
+	struct mm_struct *mm;
+	unsigned long new_pinned;
+	unsigned long cur_base;
+	unsigned int gup_flags = FOLL_WRITE;
+	int pinned, ret;
+	struct ib_umem *umem;
+	int num_buf;
+	unsigned long dma_attr = 0;
 
 	if (!IS_ENABLED(CONFIG_INFINIBAND_ON_DEMAND_PAGING))
 		return -EOPNOTSUPP;
@@ -291,15 +303,120 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 	if (IS_ERR(odp))
 		return PTR_ERR(odp);
 
+	umem = &odp->umem;
+	mm = umem->owning_mm;
+	mmgrab(mm);
+	page_list = (struct page **) __get_free_page(GFP_KERNEL);
+//	if (!page_list) {
+//		ret = -ENOMEM;
+//		goto umem_kfree;
+//	}
+
+	num_buf = ib_umem_num_pages(umem);
+	new_pinned = atomic64_add_return(num_buf, &mm->pinned_vm);
+	cur_base = start & PAGE_MASK;
+	if (!umem->writable)
+		gup_flags |= FOLL_FORCE;
+
+	while (num_buf) {
+		cond_resched();
+		pinned = pin_user_pages_fast(cur_base,
+					  min_t(unsigned long, num_buf,
+						PAGE_SIZE /
+						sizeof(struct page *)),
+					  gup_flags | FOLL_LONGTERM, page_list);
+//		if (pinned < 0) {
+//			ret = pinned;
+//			goto umem_release;
+//		}
+
+		cur_base += pinned * PAGE_SIZE;
+		num_buf -= pinned;
+		ret = sg_alloc_append_table_from_pages(
+			&umem->sgt_append, page_list, pinned, 0,
+			pinned << PAGE_SHIFT, ib_dma_max_seg_size(pd->device),
+			num_buf, GFP_KERNEL);
+//		if (ret) {
+//			unpin_user_pages_dirty_lock(page_list, pinned, 0);
+//			goto umem_release;
+//		}
+	}
+
+	if (access & IB_ACCESS_RELAXED_ORDERING)
+		dma_attr |= DMA_ATTR_WEAK_ORDERING;
+
+//	ret = ib_dma_map_sgtable_attrs(pd->device, &umem->sgt_append.sgt,
+//				       DMA_BIDIRECTIONAL, dma_attr);
+
+	free_page((unsigned long) page_list);
+
+	num_buf = ib_umem_num_pages(umem);
+        rxe_mr_init(access, mr);
+        pr_info("file:%s +%d, num_buf:%d, lkey:0x%x, rkey:0x%x,map_shift:%d, length: %d, caller:%pS\n", __FILE__, __LINE__, num_buf, mr->lkey, mr->rkey, mr->map_shift, length, __builtin_return_address(0));
+
+	ret = rxe_mr_alloc(mr, num_buf, 0);
+	if (ret) {
+		pr_warn("%s: Unable to allocate memory for map\n",
+				__func__);
+	//	goto err_release_umem;
+	}
+
+	set = mr->cur_map_set;
+	set->page_shift = PAGE_SHIFT;
+	set->page_mask = PAGE_SIZE - 1;
+
+	num_buf = 0;
+	map = set->map;
+
+	if (length > 0) {
+		struct rxe_phys_buf	*buf = NULL;
+		struct sg_page_iter	sg_iter;
+		void			*vaddr;
+		struct page *tmp;
+
+		buf = map[0]->buf;
+
+		for_each_sgtable_page (&umem->sgt_append.sgt, &sg_iter, 0) {
+			if (num_buf >= RXE_BUF_PER_MAP) {
+				map++;
+				buf = map[0]->buf;
+				num_buf = 0;
+			}
+
+			vaddr = page_address(sg_page_iter_page(&sg_iter));
+			if (!vaddr) {
+				pr_warn("%s: Unable to get virtual address\n",
+						__func__);
+	//			err = -ENOMEM;
+	//			goto err_release_umem;
+			}
+			buf->addr = (uintptr_t)vaddr;
+	//		pr_info("file: %s +%d, func:%s addr:0x%x, num_buf:%d, caller:%pS\n", __FILE__, __LINE__, __func__, buf->addr, num_buf, __builtin_return_address(0));
+			buf->size = PAGE_SIZE;
+			num_buf++;
+			buf++;
+		}
+	}
+
 	mr->ibmr.pd = pd;
-	mr->map_shift = ilog2(RXE_BUF_PER_MAP);
-	mr->umem = &odp->umem;
+	mr->umem = umem;
 	mr->access = access;
 	mr->state = RXE_MR_STATE_VALID;
 	mr->type = IB_MR_TYPE_USER;
 
+	set->length = length;
+	set->iova = iova;
+	set->va = start;
+	set->offset = ib_umem_offset(umem);
+
+//	mr->map_shift = ilog2(RXE_BUF_PER_MAP);
+//	mr->umem = &odp->umem;
+//	mr->access = access;
+//	mr->state = RXE_MR_STATE_VALID;
+//	mr->type = IB_MR_TYPE_USER;
+
 	odp->private = mr;
-	pr_info("file %s +%d, %s, %pS\n", __FILE__, __LINE__, __func__, __builtin_return_address(0));
+//	pr_info("file %s +%d, %s, %pS\n", __FILE__, __LINE__, __func__, __builtin_return_address(0));
 	return 0;
 }
 
@@ -387,7 +504,6 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 		enum rxe_mr_copy_dir dir)
 {
 	int			err;
-	int			bytes;
 	u8			*va;
 	struct rxe_map		**map;
 	struct rxe_phys_buf	*buf;
@@ -421,10 +537,11 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 	lookup_iova(mr, iova, &m, &i, &offset);
 
 	map = mr->cur_map_set->map + m;
-	buf	= map[0]->buf + i;
+	buf = map[0]->buf + i;
 
 	while (length > 0) {
 		u8 *src, *dest;
+		int bytes;
 
 		va	= (u8 *)(uintptr_t)buf->addr + offset;
 		src = (dir == RXE_TO_MR_OBJ) ? addr : va;
@@ -438,7 +555,8 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 		memcpy(dest, src, bytes);
 
 		length	-= bytes;
-		addr	+= bytes;
+		//addr	+= bytes;
+		//pr_info("file: %s +%d, func: %s, addr:0x%x, bytes:%d, caller:%pS\n", __FILE__, __LINE__, __func__, addr, bytes, __builtin_return_address(1));
 
 		offset	= 0;
 		buf++;
