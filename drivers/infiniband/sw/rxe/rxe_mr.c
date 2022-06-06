@@ -181,7 +181,6 @@ int rxe_mr_init_user(struct rxe_pd *pd, u64 start, u64 length, u64 iova,
 	if (access & IB_ACCESS_ON_DEMAND) {
 		return rxe_create_user_odp_mr(&pd->ibpd, start, length,
 					      iova, access, mr);
-		//access &= (~IB_ACCESS_ON_DEMAND);
 	}
 
 	umem = ib_umem_get(pd->ibpd.device, start, length, access);
@@ -288,10 +287,10 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 	struct rxe_map          **map;
 //	struct page **page_list;
 //	struct mm_struct *mm;
-	unsigned long new_pinned;
-	unsigned long cur_base;
-	unsigned int gup_flags = FOLL_WRITE;
-	int pinned, ret;
+	//unsigned long new_pinned;
+	//unsigned long cur_base;
+	//unsigned int gup_flags = FOLL_WRITE;
+	int /*pinned,*/ ret;
 	struct ib_umem *umem;
 	int num_buf;
 //	unsigned long dma_attr = 0;
@@ -396,13 +395,14 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 			num_buf++;
 			buf++;
 		}
-#endif
+
 		while (num_buf < ib_umem_num_pages(umem)) {
 			num_buf++;
 			buf->addr = (uintptr_t)kzalloc(PAGE_SIZE, GFP_KERNEL);
 			buf->size = PAGE_SIZE;
 			buf++;
 		}
+#endif
 	}
 
 	mr->ibmr.pd = pd;
@@ -423,6 +423,7 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 //	mr->type = IB_MR_TYPE_USER;
 
 	odp->private = mr;
+	odp->npages = ib_umem_num_pages(umem);
 //	pr_info("file %s +%d, %s, %pS\n", __FILE__, __LINE__, __func__, __builtin_return_address(0));
 	return 0;
 }
@@ -492,6 +493,11 @@ void *iova_to_vaddr(struct rxe_mr *mr, u64 iova, int length)
 
 	lookup_iova(mr, iova, &m, &n, &offset);
 
+	if (mr->cur_map_set->map[m]->buf[n].size == 0) {
+		mr->cur_map_set->map[m]->buf[n].addr = (uintptr_t)kzalloc(PAGE_SIZE, GFP_KERNEL);
+		mr->cur_map_set->map[m]->buf[n].size = PAGE_SIZE;
+	}
+
 	if (offset + length > mr->cur_map_set->map[m]->buf[n].size) {
 		pr_warn("crosses page boundary\n");
 		addr = NULL;
@@ -546,6 +552,11 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 	map = mr->cur_map_set->map + m;
 	buf = map[0]->buf + i;
 
+	//pr_info("file: %s +%d, func: %s, length:%d, caller:%pS\n", __FILE__, __LINE__, __func__, length, __builtin_return_address(0));
+	if (buf->size == 0) {
+		buf->addr = (uintptr_t)kzalloc(PAGE_SIZE, GFP_KERNEL);
+		buf->size = PAGE_SIZE;
+	}
 	while (length > 0) {
 		u8 *src, *dest;
 		int bytes;
@@ -563,7 +574,7 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 
 		length	-= bytes;
 		//addr	+= bytes;
-		//pr_info("file: %s +%d, func: %s, addr:0x%x, bytes:%d, caller:%pS\n", __FILE__, __LINE__, __func__, addr, bytes, __builtin_return_address(1));
+		//pr_info("file: %s +%d, func: %s, addr:0x%x, bytes:%d, length:%d, caller:%pS\n", __FILE__, __LINE__, __func__, addr, bytes, length, __builtin_return_address(0));
 
 		offset	= 0;
 		buf++;
@@ -867,7 +878,10 @@ void rxe_mr_cleanup(struct rxe_pool_elem *elem)
 	if (mr->access & IB_ACCESS_ON_DEMAND) {
 		int i = 0;
 		for (i=0; i<ib_umem_num_pages(mr->umem); i++) {
-			kfree(mr->cur_map_set->map[0]->buf+i);
+			struct rxe_phys_buf *buf = mr->cur_map_set->map[0]->buf+i;
+			if (buf->size != 0) {
+				kfree(mr->cur_map_set->map[0]->buf+i);
+			}
 		}
 	}
 	ib_umem_release(mr->umem);
