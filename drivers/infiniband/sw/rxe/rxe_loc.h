@@ -192,4 +192,5 @@ static inline unsigned int wr_opcode_mask(int opcode, struct rxe_qp *qp)
 	return rxe_wr_opcode_info[opcode].mask[qp->ibqp.qp_type];
 }
 
+void rxe_internal_fill_odp_caps(struct rxe_dev *dev);
 #endif /* RXE_LOC_H */
