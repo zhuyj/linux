@@ -83,7 +83,7 @@ static int rxe_mr_alloc_map_set(int num_map, struct rxe_map_set **setp)
 	int i;
 	struct rxe_map_set *set;
 
-	set = kmalloc(sizeof(*set), GFP_KERNEL);
+	set = kzalloc(sizeof(*set), GFP_KERNEL);
 	if (!set)
 		goto err_out;
 
@@ -92,7 +92,7 @@ static int rxe_mr_alloc_map_set(int num_map, struct rxe_map_set **setp)
 		goto err_free_set;
 
 	for (i = 0; i < num_map; i++) {
-		set->map[i] = kmalloc(sizeof(struct rxe_map), GFP_KERNEL);
+		set->map[i] = kzalloc(sizeof(struct rxe_map), GFP_KERNEL);
 		if (!set->map[i])
 			goto err_free_map;
 	}
@@ -286,15 +286,15 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 	struct rxe_dev *rxe = to_rdev(pd->device);
 	struct rxe_map_set      *set;
 	struct rxe_map          **map;
-	struct page **page_list;
-	struct mm_struct *mm;
+//	struct page **page_list;
+//	struct mm_struct *mm;
 	unsigned long new_pinned;
 	unsigned long cur_base;
 	unsigned int gup_flags = FOLL_WRITE;
 	int pinned, ret;
 	struct ib_umem *umem;
 	int num_buf;
-	unsigned long dma_attr = 0;
+//	unsigned long dma_attr = 0;
 
 	if (!IS_ENABLED(CONFIG_INFINIBAND_ON_DEMAND_PAGING))
 		return -EOPNOTSUPP;
@@ -304,6 +304,7 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 		return PTR_ERR(odp);
 
 	umem = &odp->umem;
+#if 0
 	mm = umem->owning_mm;
 	mmgrab(mm);
 	page_list = (struct page **) __get_free_page(GFP_KERNEL);
@@ -342,17 +343,17 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 //		}
 	}
 
-	if (access & IB_ACCESS_RELAXED_ORDERING)
-		dma_attr |= DMA_ATTR_WEAK_ORDERING;
+//	if (access & IB_ACCESS_RELAXED_ORDERING)
+//		dma_attr |= DMA_ATTR_WEAK_ORDERING;
 
 //	ret = ib_dma_map_sgtable_attrs(pd->device, &umem->sgt_append.sgt,
 //				       DMA_BIDIRECTIONAL, dma_attr);
 
 	free_page((unsigned long) page_list);
-
+#endif
 	num_buf = ib_umem_num_pages(umem);
         rxe_mr_init(access, mr);
-        pr_info("file:%s +%d, num_buf:%d, lkey:0x%x, rkey:0x%x,map_shift:%d, length: %d, caller:%pS\n", __FILE__, __LINE__, num_buf, mr->lkey, mr->rkey, mr->map_shift, length, __builtin_return_address(0));
+        pr_info("file:%s +%d, num_buf:%d, lkey:0x%x, rkey:0x%x,map_shift:%d, length: %llu, caller:%pS\n", __FILE__, __LINE__, num_buf, mr->lkey, mr->rkey, mr->map_shift, length, __builtin_return_address(0));
 
 	ret = rxe_mr_alloc(mr, num_buf, 0);
 	if (ret) {
@@ -370,12 +371,11 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 
 	if (length > 0) {
 		struct rxe_phys_buf	*buf = NULL;
-		struct sg_page_iter	sg_iter;
-		void			*vaddr;
-		struct page *tmp;
+//		struct sg_page_iter	sg_iter;
+//		void			*vaddr;
 
 		buf = map[0]->buf;
-
+#if 0
 		for_each_sgtable_page (&umem->sgt_append.sgt, &sg_iter, 0) {
 			if (num_buf >= RXE_BUF_PER_MAP) {
 				map++;
@@ -394,6 +394,13 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 	//		pr_info("file: %s +%d, func:%s addr:0x%x, num_buf:%d, caller:%pS\n", __FILE__, __LINE__, __func__, buf->addr, num_buf, __builtin_return_address(0));
 			buf->size = PAGE_SIZE;
 			num_buf++;
+			buf++;
+		}
+#endif
+		while (num_buf < ib_umem_num_pages(umem)) {
+			num_buf++;
+			buf->addr = (uintptr_t)kzalloc(PAGE_SIZE, GFP_KERNEL);
+			buf->size = PAGE_SIZE;
 			buf++;
 		}
 	}
@@ -856,6 +863,13 @@ void rxe_mr_cleanup(struct rxe_pool_elem *elem)
 {
 	struct rxe_mr *mr = container_of(elem, typeof(*mr), elem);
 
+	/* for ODP release */
+	if (mr->access & IB_ACCESS_ON_DEMAND) {
+		int i = 0;
+		for (i=0; i<ib_umem_num_pages(mr->umem); i++) {
+			kfree(mr->cur_map_set->map[0]->buf+i);
+		}
+	}
 	ib_umem_release(mr->umem);
 
 	if (mr->cur_map_set)
