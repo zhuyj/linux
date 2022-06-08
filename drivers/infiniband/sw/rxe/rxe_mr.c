@@ -494,7 +494,7 @@ void *iova_to_vaddr(struct rxe_mr *mr, u64 iova, int length)
 	lookup_iova(mr, iova, &m, &n, &offset);
 
 	if (mr->cur_map_set->map[m]->buf[n].size == 0) {
-		mr->cur_map_set->map[m]->buf[n].addr = (uintptr_t)kzalloc(PAGE_SIZE, GFP_KERNEL);
+		mr->cur_map_set->map[m]->buf[n].addr = (uintptr_t)kzalloc(PAGE_SIZE, GFP_ATOMIC);
 		mr->cur_map_set->map[m]->buf[n].size = PAGE_SIZE;
 	}
 
@@ -552,9 +552,9 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 	map = mr->cur_map_set->map + m;
 	buf = map[0]->buf + i;
 
-	//pr_info("file: %s +%d, func: %s, length:%d, caller:%pS\n", __FILE__, __LINE__, __func__, length, __builtin_return_address(0));
+	//pr_info("file: %s +%d, func: %s, length:%d, lkey:0x%x, rkey:0x%x, caller:%pS\n", __FILE__, __LINE__, __func__, length, mr->lkey, mr->rkey, __builtin_return_address(0));
 	if (buf->size == 0) {
-		buf->addr = (uintptr_t)kzalloc(PAGE_SIZE, GFP_KERNEL);
+		buf->addr = (uintptr_t)kzalloc(PAGE_SIZE, GFP_ATOMIC);
 		buf->size = PAGE_SIZE;
 	}
 	while (length > 0) {
