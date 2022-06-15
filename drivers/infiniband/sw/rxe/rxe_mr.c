@@ -9,6 +9,9 @@
 #include <rdma/ib_umem_odp.h>
 #include <linux/sched/mm.h>
 
+u64 g_addr[32] = {0};
+int g_used = 0;
+
 /* Return a random 8 bit key value that is
  * different than the last_key. Set last_key to -1
  * if this is the first key for an MR or MW
@@ -285,15 +288,15 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 	struct rxe_dev *rxe = to_rdev(pd->device);
 	struct rxe_map_set      *set;
 	struct rxe_map          **map;
-//	struct page **page_list;
-//	struct mm_struct *mm;
-	//unsigned long new_pinned;
-	//unsigned long cur_base;
-	//unsigned int gup_flags = FOLL_WRITE;
-	int /*pinned,*/ ret;
+	struct page **page_list;
+	struct mm_struct *mm;
+	unsigned long new_pinned;
+	unsigned long cur_base;
+	unsigned int gup_flags = FOLL_WRITE;
+	int pinned, ret;
 	struct ib_umem *umem;
 	int num_buf;
-//	unsigned long dma_attr = 0;
+	unsigned long dma_attr = 0;
 
 	if (!IS_ENABLED(CONFIG_INFINIBAND_ON_DEMAND_PAGING))
 		return -EOPNOTSUPP;
@@ -303,16 +306,24 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 		return PTR_ERR(odp);
 
 	umem = &odp->umem;
-#if 0
+	num_buf = ib_umem_num_pages(umem);
+	rxe_mr_init(access, mr);
+	pr_info("file:%s +%d, num_buf:%d, lkey:0x%x, rkey:0x%x,map_shift:%d, length: %llu, caller:%pS\n", __FILE__, __LINE__, num_buf, mr->lkey, mr->rkey, mr->map_shift, length, __builtin_return_address(0));
+	ret = rxe_mr_alloc(mr, num_buf, 0);
+	if (ret) {
+		pr_warn("%s: Unable to allocate memory for map\n",
+				__func__);
+	//      goto err_release_umem;
+	}
+
 	mm = umem->owning_mm;
 	mmgrab(mm);
-	page_list = (struct page **) __get_free_page(GFP_KERNEL);
+	page_list = (struct page **)__get_free_page(GFP_KERNEL);
 //	if (!page_list) {
 //		ret = -ENOMEM;
 //		goto umem_kfree;
 //	}
 
-	num_buf = ib_umem_num_pages(umem);
 	new_pinned = atomic64_add_return(num_buf, &mm->pinned_vm);
 	cur_base = start & PAGE_MASK;
 	if (!umem->writable)
@@ -342,24 +353,13 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 //		}
 	}
 
-//	if (access & IB_ACCESS_RELAXED_ORDERING)
-//		dma_attr |= DMA_ATTR_WEAK_ORDERING;
+	if (access & IB_ACCESS_RELAXED_ORDERING)
+		dma_attr |= DMA_ATTR_WEAK_ORDERING;
 
-//	ret = ib_dma_map_sgtable_attrs(pd->device, &umem->sgt_append.sgt,
-//				       DMA_BIDIRECTIONAL, dma_attr);
+	ret = ib_dma_map_sgtable_attrs(pd->device, &umem->sgt_append.sgt,
+				       DMA_BIDIRECTIONAL, dma_attr);
 
-	free_page((unsigned long) page_list);
-#endif
-	num_buf = ib_umem_num_pages(umem);
-        rxe_mr_init(access, mr);
-        pr_info("file:%s +%d, num_buf:%d, lkey:0x%x, rkey:0x%x,map_shift:%d, length: %llu, caller:%pS\n", __FILE__, __LINE__, num_buf, mr->lkey, mr->rkey, mr->map_shift, length, __builtin_return_address(0));
-
-	ret = rxe_mr_alloc(mr, num_buf, 0);
-	if (ret) {
-		pr_warn("%s: Unable to allocate memory for map\n",
-				__func__);
-	//	goto err_release_umem;
-	}
+	free_page((unsigned long)page_list);
 
 	set = mr->cur_map_set;
 	set->page_shift = PAGE_SHIFT;
@@ -370,11 +370,11 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 
 	if (length > 0) {
 		struct rxe_phys_buf	*buf = NULL;
-//		struct sg_page_iter	sg_iter;
-//		void			*vaddr;
+		struct sg_page_iter	sg_iter;
+		void			*vaddr;
 
 		buf = map[0]->buf;
-#if 0
+
 		for_each_sgtable_page (&umem->sgt_append.sgt, &sg_iter, 0) {
 			if (num_buf >= RXE_BUF_PER_MAP) {
 				map++;
@@ -389,13 +389,17 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 	//			err = -ENOMEM;
 	//			goto err_release_umem;
 			}
+#if 0
 			buf->addr = (uintptr_t)vaddr;
 	//		pr_info("file: %s +%d, func:%s addr:0x%x, num_buf:%d, caller:%pS\n", __FILE__, __LINE__, __func__, buf->addr, num_buf, __builtin_return_address(0));
 			buf->size = PAGE_SIZE;
+#endif
+			g_addr[num_buf] = (uintptr_t)vaddr;
 			num_buf++;
 			buf++;
 		}
-
+		g_used = 0;
+#if 0
 		while (num_buf < ib_umem_num_pages(umem)) {
 			num_buf++;
 			buf->addr = (uintptr_t)kzalloc(PAGE_SIZE, GFP_KERNEL);
@@ -492,12 +496,13 @@ void *iova_to_vaddr(struct rxe_mr *mr, u64 iova, int length)
 	}
 
 	lookup_iova(mr, iova, &m, &n, &offset);
-
+#if 1
+	pr_info("file:%s +%d, m:%d, n:%d caller:%pS\n", __FILE__, __LINE__, m, n, __builtin_return_address(0));
 	if (mr->cur_map_set->map[m]->buf[n].size == 0) {
-		mr->cur_map_set->map[m]->buf[n].addr = (uintptr_t)kzalloc(PAGE_SIZE, GFP_ATOMIC);
+		mr->cur_map_set->map[m]->buf[n].addr = g_addr[g_used++];//(uintptr_t)kzalloc(PAGE_SIZE, GFP_ATOMIC);
 		mr->cur_map_set->map[m]->buf[n].size = PAGE_SIZE;
 	}
-
+#endif
 	if (offset + length > mr->cur_map_set->map[m]->buf[n].size) {
 		pr_warn("crosses page boundary\n");
 		addr = NULL;
@@ -551,12 +556,13 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 
 	map = mr->cur_map_set->map + m;
 	buf = map[0]->buf + i;
-
-	//pr_info("file: %s +%d, func: %s, length:%d, lkey:0x%x, rkey:0x%x, caller:%pS\n", __FILE__, __LINE__, __func__, length, mr->lkey, mr->rkey, __builtin_return_address(0));
+#if 1
+	//pr_info("file: %s +%d, func: %s, length:%d, lkey:0x%x, rkey:0x%x, m:%d, i:%d, caller:%pS\n", __FILE__, __LINE__, __func__, length, mr->lkey, mr->rkey, m, i, __builtin_return_address(0));
 	if (buf->size == 0) {
-		buf->addr = (uintptr_t)kzalloc(PAGE_SIZE, GFP_ATOMIC);
+		buf->addr = g_addr[g_used++];//(uintptr_t)kzalloc(PAGE_SIZE, GFP_ATOMIC);
 		buf->size = PAGE_SIZE;
 	}
+#endif
 	while (length > 0) {
 		u8 *src, *dest;
 		int bytes;
@@ -875,6 +881,7 @@ void rxe_mr_cleanup(struct rxe_pool_elem *elem)
 	struct rxe_mr *mr = container_of(elem, typeof(*mr), elem);
 
 	/* for ODP release */
+#if 0
 	if (mr->access & IB_ACCESS_ON_DEMAND) {
 		int i = 0;
 		for (i=0; i<ib_umem_num_pages(mr->umem); i++) {
@@ -884,6 +891,9 @@ void rxe_mr_cleanup(struct rxe_pool_elem *elem)
 			}
 		}
 	}
+#endif
+	g_used = 0;
+
 	ib_umem_release(mr->umem);
 
 	if (mr->cur_map_set)
