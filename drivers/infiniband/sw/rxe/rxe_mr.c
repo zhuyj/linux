@@ -278,6 +278,70 @@ err1:
 	return err;
 }
 
+static void rxe_pin_user_pages(struct ib_umem *umem, u64 start, int access, int num_buf)
+{
+	struct mm_struct *mm;
+	struct page **page_list;
+	unsigned long new_pinned;
+	unsigned long cur_base;
+	unsigned int gup_flags = FOLL_WRITE;
+	int pinned;
+	int ret;
+	unsigned long dma_attr = 0;
+	int left_nents;// = ib_umem_num_pages(umem) - umem->sgt_append.total_nents;
+
+	mm = umem->owning_mm;
+	mmgrab(mm);
+	page_list = (struct page **)__get_free_page(GFP_KERNEL);
+//	if (!page_list) {
+//		ret = -ENOMEM;
+//		goto umem_kfree;
+//	}
+	new_pinned = atomic64_add_return(num_buf, &mm->pinned_vm);
+//	pr_info("file: %s +%d, start:0x%llx, total_nents:%u\n", __FILE__, __LINE__, start, umem->sgt_append.total_nents);
+	cur_base = (start & PAGE_MASK) + (PAGE_SIZE * (int)(umem->sgt_append.sgt.nents));
+	//pr_info("file: %s +%d, cur_base: 0x%lx\n", __FILE__, __LINE__, cur_base);
+	if (!umem->writable)
+		gup_flags |= FOLL_FORCE;
+
+	while (num_buf) {
+		cond_resched();
+//		pr_info("file: %s +%d, cur_base: 0x%lx\n", __FILE__, __LINE__, cur_base);
+		pinned = pin_user_pages_fast(cur_base,
+					  min_t(unsigned long, /*num_buf*/1,
+						PAGE_SIZE /
+						sizeof(struct page *)),
+					  gup_flags | FOLL_LONGTERM, page_list);
+//		if (pinned < 0) {
+//			ret = pinned;
+//			goto umem_release;
+//		}
+//		pr_info("file: %s +%d, cur_base: 0x%lx, pinned:%d\n", __FILE__, __LINE__, cur_base, pinned);
+		cur_base += pinned * PAGE_SIZE;
+		num_buf -= pinned;
+		left_nents = ib_umem_num_pages(umem) - umem->sgt_append.sgt.nents - pinned;
+		//pr_info("file: %s +%d, total_nents:%u, pinned:%d, num_buf:%d, left_nents:%d\n", __FILE__, __LINE__, umem->sgt_append.total_nents, pinned, num_buf, left_nents);
+		ret = sg_alloc_append_table_from_pages(
+			&umem->sgt_append, page_list, pinned, 0,
+			pinned << PAGE_SHIFT, ib_dma_max_seg_size(umem->ibdev),
+			/*num_buf*/left_nents, GFP_KERNEL);
+		if (ret) {
+			unpin_user_pages_dirty_lock(page_list, pinned, 0);
+//			pr_info("file: %s +%d, ret:%d\n", __FILE__, __LINE__, ret);
+//			goto umem_release;
+		}
+//		pr_info("file: %s +%d, total_nents:%u\n", __FILE__, __LINE__, umem->sgt_append.total_nents);
+	}
+
+	if (access & IB_ACCESS_RELAXED_ORDERING)
+		dma_attr |= DMA_ATTR_WEAK_ORDERING;
+
+	ret = ib_dma_map_sgtable_attrs(umem->ibdev, &umem->sgt_append.sgt,
+				       DMA_BIDIRECTIONAL, dma_attr);
+
+	free_page((unsigned long)page_list);
+}
+
 extern struct mmu_interval_notifier_ops rxe_mn_ops;
 
 int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
@@ -295,7 +359,7 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 	unsigned int gup_flags = FOLL_WRITE;
 	int pinned, ret;
 	struct ib_umem *umem;
-	int num_buf;
+	int num_buf, i;
 	unsigned long dma_attr = 0;
 
 	if (!IS_ENABLED(CONFIG_INFINIBAND_ON_DEMAND_PAGING))
@@ -315,7 +379,10 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 				__func__);
 	//      goto err_release_umem;
 	}
-
+	for (i=0; i<num_buf; i++) {
+		rxe_pin_user_pages(umem, start, access, 1);
+	}
+#if 0
 	mm = umem->owning_mm;
 	mmgrab(mm);
 	page_list = (struct page **)__get_free_page(GFP_KERNEL);
@@ -360,7 +427,7 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 				       DMA_BIDIRECTIONAL, dma_attr);
 
 	free_page((unsigned long)page_list);
-
+#endif
 	set = mr->cur_map_set;
 	set->page_shift = PAGE_SHIFT;
 	set->page_mask = PAGE_SIZE - 1;
@@ -559,6 +626,7 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 #if 1
 	//pr_info("file: %s +%d, func: %s, length:%d, lkey:0x%x, rkey:0x%x, m:%d, i:%d, caller:%pS\n", __FILE__, __LINE__, __func__, length, mr->lkey, mr->rkey, m, i, __builtin_return_address(0));
 	if (buf->size == 0) {
+//		rxe_pin_user_pages(mr->umem, start, mr->access, 1);
 		buf->addr = g_addr[g_used++];//(uintptr_t)kzalloc(PAGE_SIZE, GFP_ATOMIC);
 		buf->size = PAGE_SIZE;
 	}
