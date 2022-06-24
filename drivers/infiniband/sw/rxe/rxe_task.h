@@ -21,6 +21,7 @@ enum {
 struct rxe_task {
 	void			*obj;
 	struct tasklet_struct	tasklet;
+	struct work_struct	rxe_workqueue;
 	int			state;
 	spinlock_t		state_lock; /* spinlock for task state */
 	void			*arg;

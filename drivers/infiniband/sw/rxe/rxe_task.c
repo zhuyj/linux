@@ -67,7 +67,7 @@ void rxe_do_task(struct tasklet_struct *t)
 				cont = 1;
 			break;
 
-		/* soneone tried to run the task since the last time we called
+		/* someone tried to run the task since the last time we called
 		 * func, so we will call one more time regardless of the
 		 * return value
 		 */
@@ -86,6 +86,65 @@ void rxe_do_task(struct tasklet_struct *t)
 	task->ret = ret;
 }
 
+void rxe_work_queue(struct work_struct *work)
+{
+	int cont;
+	int ret;
+	unsigned long flags;
+	struct rxe_task *task = container_of(work, struct rxe_task, rxe_workqueue);
+
+	spin_lock_irqsave(&task->state_lock, flags);
+	switch (task->state) {
+	case TASK_STATE_START:
+		task->state = TASK_STATE_BUSY;
+		spin_unlock_irqrestore(&task->state_lock, flags);
+		break;
+
+	case TASK_STATE_BUSY:
+		task->state = TASK_STATE_ARMED;
+		/* fall through */
+	case TASK_STATE_ARMED:
+		spin_unlock_irqrestore(&task->state_lock, flags);
+		return;
+
+	default:
+		spin_unlock_irqrestore(&task->state_lock, flags);
+		pr_warn("%s failed with bad state %d\n", __func__, task->state);
+		return;
+	}
+
+	do {
+		cont = 0;
+		ret = task->func(task->arg);
+
+		spin_lock_irqsave(&task->state_lock, flags);
+		switch (task->state) {
+		case TASK_STATE_BUSY:
+			if (ret)
+				task->state = TASK_STATE_START;
+			else
+				cont = 1;
+			break;
+
+		/* soneone tried to run the task since the last time we called
+		 * func, so we will call one more time regardless of the
+		 * return value
+		 */
+		case TASK_STATE_ARMED:
+			task->state = TASK_STATE_BUSY;
+			cont = 1;
+			break;
+
+		default:
+			pr_warn("%s failed with bad state %d\n", __func__,
+				task->state);
+		}
+		spin_unlock_irqrestore(&task->state_lock, flags);
+	} while (cont);
+
+	task->ret = ret;
+}
+
 int rxe_init_task(void *obj, struct rxe_task *task,
 		  void *arg, int (*func)(void *), char *name)
 {
@@ -96,6 +155,7 @@ int rxe_init_task(void *obj, struct rxe_task *task,
 	task->destroyed	= false;
 
 	tasklet_setup(&task->tasklet, rxe_do_task);
+	INIT_WORK(&task->rxe_workqueue, rxe_work_queue);
 
 	task->state = TASK_STATE_START;
 	spin_lock_init(&task->state_lock);
@@ -120,6 +180,8 @@ void rxe_cleanup_task(struct rxe_task *task)
 	} while (!idle);
 
 	tasklet_kill(&task->tasklet);
+	flush_work(&task->rxe_workqueue);
+	cancel_work_sync(&task->rxe_workqueue);
 }
 
 void rxe_run_task(struct rxe_task *task, int sched)
@@ -127,10 +189,12 @@ void rxe_run_task(struct rxe_task *task, int sched)
 	if (task->destroyed)
 		return;
 
-	if (sched)
+	if (sched == 1)
 		tasklet_schedule(&task->tasklet);
-	else
+	else if (sched == 0)
 		rxe_do_task(&task->tasklet);
+	else
+		schedule_work(&task->rxe_workqueue);
 }
 
 void rxe_disable_task(struct rxe_task *task)
