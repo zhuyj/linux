@@ -297,6 +297,7 @@ static void rxe_pin_user_pages(struct ib_umem *umem, u64 start, int access, int 
 //		ret = -ENOMEM;
 //		goto umem_kfree;
 //	}
+
 	new_pinned = atomic64_add_return(num_buf, &mm->pinned_vm);
 	//pr_info("file: %s +%d, start:0x%llx, total_nents:%u\n", __FILE__, __LINE__, start, umem->sgt_append.total_nents);
 	cur_base = (start & PAGE_MASK) + (PAGE_SIZE * (int)(umem->sgt_append.sgt.nents));
@@ -306,16 +307,17 @@ static void rxe_pin_user_pages(struct ib_umem *umem, u64 start, int access, int 
 
 	while (num_buf) {
 		cond_resched();
-//		pr_info("file: %s +%d, cur_base: 0x%lx\n", __FILE__, __LINE__, cur_base);
+	//	pr_info("file: %s +%d, cur_base: 0x%lx\n", __FILE__, __LINE__, cur_base);
 		pinned = pin_user_pages_fast(cur_base,
 					  min_t(unsigned long, /*num_buf*/1,
 						PAGE_SIZE /
 						sizeof(struct page *)),
 					  gup_flags | FOLL_LONGTERM, page_list);
-//		if (pinned < 0) {
-//			ret = pinned;
+		if (pinned < 0) {
+			ret = pinned;
+			pr_info("file: %s +%d, cur_base: 0x%lx, pinned:%d\n", __FILE__, __LINE__, cur_base, pinned);
 //			goto umem_release;
-//		}
+		}
 //		pr_info("file: %s +%d, cur_base: 0x%lx, pinned:%d\n", __FILE__, __LINE__, cur_base, pinned);
 		cur_base += pinned * PAGE_SIZE;
 		num_buf -= pinned;
@@ -327,7 +329,7 @@ static void rxe_pin_user_pages(struct ib_umem *umem, u64 start, int access, int 
 			/*num_buf*/left_nents, GFP_KERNEL);
 		if (ret) {
 			unpin_user_pages_dirty_lock(page_list, pinned, 0);
-//			pr_info("file: %s +%d, ret:%d\n", __FILE__, __LINE__, ret);
+			pr_info("file: %s +%d, ret:%d\n", __FILE__, __LINE__, ret);
 //			goto umem_release;
 		}
 //		pr_info("file: %s +%d, total_nents:%u\n", __FILE__, __LINE__, umem->sgt_append.total_nents);
@@ -632,9 +634,59 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 #if 1
 	//pr_info("file: %s +%d, func: %s, length:%d, lkey:0x%x, rkey:0x%x, m:%d, i:%d, start:%llx, caller:%pS\n", __FILE__, __LINE__, __func__, length, mr->lkey, mr->rkey, m, i,mr->cur_map_set->va, __builtin_return_address(0));
 	if (buf->size == 0) {
-		rxe_pin_user_pages(mr->umem, mr->cur_map_set->va, mr->access, 1);
-		buf->addr = mr->umem->sgt_append.prv->dma_address;//g_addr[g_used++];//(uintptr_t)kzalloc(PAGE_SIZE, GFP_ATOMIC);
-		buf->size = PAGE_SIZE;
+		if (in_task()) {
+			rxe_pin_user_pages(mr->umem, mr->cur_map_set->va, mr->access, 1);
+		//	pr_info("file: %s +%d, %d, 0x%llx, caller:%pS\n", __FILE__, __LINE__, mr->umem->sgt_append.sgt.nents, mr->umem->sgt_append.prv->dma_address, __builtin_return_address(0));
+			buf->addr = mr->umem->sgt_append.prv->dma_address;//g_addr[g_used++];//(uintptr_t)kzalloc(PAGE_SIZE, GFP_ATOMIC);
+			buf->size = PAGE_SIZE;
+		} else if (!in_task()) {
+			struct ib_umem *umem = mr->umem;
+			int ret;
+			struct page **page_d;
+			int left_nents = ib_umem_num_pages(umem) - umem->sgt_append.sgt.nents - 1;
+			unsigned long dma_attr = 0;
+
+			page_d = (struct page **)__get_free_page(GFP_ATOMIC);
+	//		pr_info("file: %s +%d, 0x%lx, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)page_d, __builtin_return_address(0));
+			//page_d = (struct page **)PAGE_ALIGN((unsigned long)page_d);
+			page_d = (struct page **)PAGE_ALIGN((unsigned long)page_d);
+	//		pr_info("file: %s +%d, 0x%lx, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)page_d, __builtin_return_address(0));
+	                ret = sg_alloc_append_table_from_pages(
+					&umem->sgt_append, page_d, 1, 0,
+					1 << PAGE_SHIFT, ib_dma_max_seg_size(umem->ibdev),
+					left_nents, GFP_ATOMIC);
+			if (ret) {
+				unpin_user_pages_dirty_lock(page_d, 1, 0);
+				pr_info("file: %s +%d, ret:%d\n", __FILE__, __LINE__, ret);
+//                      goto umem_release;
+			}
+
+			if (mr->access & IB_ACCESS_RELAXED_ORDERING)
+				dma_attr |= DMA_ATTR_WEAK_ORDERING;
+
+			ret = ib_dma_map_sgtable_attrs(umem->ibdev, &umem->sgt_append.sgt,
+						       DMA_BIDIRECTIONAL, dma_attr);
+#if 0
+	{
+		struct sg_page_iter     sg_iter;
+		void                    *vaddr;
+
+		for_each_sgtable_page (&umem->sgt_append.sgt, &sg_iter, 0) {
+			vaddr = page_address(sg_page_iter_page(&sg_iter));
+			if (!vaddr) {
+				pr_warn("%s: Unable to get virtual address\n",
+						__func__);
+			}
+
+			pr_info("file: %s +%d, addr:0x%lx, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)vaddr, __builtin_return_address(0));
+	       }
+	}
+#endif
+			//pr_info("file: %s +%d, 0x%lx, %d, %lu, 0x%llx, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)page_d, umem->sgt_append.sgt.nents, ib_umem_num_pages(umem), mr->umem->sgt_append.prv->dma_address, __builtin_return_address(0));
+			buf->addr = (uintptr_t)page_d;
+			buf->size = PAGE_SIZE;
+			//free_page((unsigned long)page_d);
+		}
 	}
 #endif
 	while (length > 0) {
@@ -953,20 +1005,6 @@ int rxe_dereg_mr(struct ib_mr *ibmr, struct ib_udata *udata)
 void rxe_mr_cleanup(struct rxe_pool_elem *elem)
 {
 	struct rxe_mr *mr = container_of(elem, typeof(*mr), elem);
-
-	/* for ODP release */
-#if 0
-	if (mr->access & IB_ACCESS_ON_DEMAND) {
-		int i = 0;
-		for (i=0; i<ib_umem_num_pages(mr->umem); i++) {
-			struct rxe_phys_buf *buf = mr->cur_map_set->map[0]->buf+i;
-			if (buf->size != 0) {
-				kfree(mr->cur_map_set->map[0]->buf+i);
-			}
-		}
-	}
-#endif
-//	g_used = 0;
 
 	ib_umem_release(mr->umem);
 
