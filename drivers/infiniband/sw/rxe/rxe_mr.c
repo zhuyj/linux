@@ -278,7 +278,7 @@ err1:
 	return err;
 }
 
-static void rxe_pin_user_pages(struct ib_umem *umem, u64 start, int access, int num_buf)
+void rxe_pin_user_pages(struct ib_umem *umem, u64 start, int access, int num_buf)
 {
 	struct mm_struct *mm;
 	struct page **page_list;
@@ -642,21 +642,21 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 		} else if (!in_task()) {
 			struct ib_umem *umem = mr->umem;
 			int ret;
-			struct page **page_d;
+			struct page *page_d;
 			int left_nents = ib_umem_num_pages(umem) - umem->sgt_append.sgt.nents - 1;
 			unsigned long dma_attr = 0;
 
-			page_d = (struct page **)__get_free_page(GFP_ATOMIC);
+			page_d = (struct page *)__get_free_page(GFP_ATOMIC);
 	//		pr_info("file: %s +%d, 0x%lx, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)page_d, __builtin_return_address(0));
 			//page_d = (struct page **)PAGE_ALIGN((unsigned long)page_d);
-			page_d = (struct page **)PAGE_ALIGN((unsigned long)page_d);
-	//		pr_info("file: %s +%d, 0x%lx, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)page_d, __builtin_return_address(0));
+			page_d = (struct page *)ALIGN((unsigned long)(page_d), sizeof(u32));
+			//pr_info("file: %s +%d, 0x%lx, 0x%lx, left_nents:%d, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)page_d, (uintptr_t)(*page_d), left_nents, __builtin_return_address(0));
 	                ret = sg_alloc_append_table_from_pages(
-					&umem->sgt_append, page_d, 1, 0,
+					&umem->sgt_append, &page_d, 1, 0,
 					1 << PAGE_SHIFT, ib_dma_max_seg_size(umem->ibdev),
 					left_nents, GFP_ATOMIC);
 			if (ret) {
-				unpin_user_pages_dirty_lock(page_d, 1, 0);
+				unpin_user_pages_dirty_lock(&page_d, 1, 0);
 				pr_info("file: %s +%d, ret:%d\n", __FILE__, __LINE__, ret);
 //                      goto umem_release;
 			}
