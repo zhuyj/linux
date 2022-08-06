@@ -378,10 +378,6 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 				__func__);
 	//      goto err_release_umem;
 	}
-//	for (i=0; i<num_buf; i++) {
-//		rxe_pin_user_pages(umem, start, access, 1);
-//		pr_info("file: %s +%d, %d, 0x%llx, caller:%pS\n", __FILE__, __LINE__, umem->sgt_append.sgt.nents, umem->sgt_append.prv->dma_address, __builtin_return_address(0));
-//	}
 #if 0
 	mm = umem->owning_mm;
 	mmgrab(mm);
