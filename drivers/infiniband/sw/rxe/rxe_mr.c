@@ -358,7 +358,7 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 	unsigned int gup_flags = FOLL_WRITE;
 	int pinned, ret;
 	struct ib_umem *umem;
-	int num_buf, i;
+	int num_buf;
 	unsigned long dma_attr = 0;
 
 	if (!IS_ENABLED(CONFIG_INFINIBAND_ON_DEMAND_PAGING))
@@ -509,6 +509,7 @@ static void lookup_iova(struct rxe_mr *mr, u64 iova, int *m_out, int *n_out,
 		offset >>= set->page_shift;
 		*n_out = offset & mr->map_mask;
 		*m_out = offset >> mr->map_shift;
+	//	pr_info("File: %s +%d, offset:%zu,offset_out:%zu, n_out:%d, m_out:%d, %pS\n", __FILE__, __LINE__, offset, *offset_out, *n_out, *m_out, __builtin_return_address(0));
 	} else {
 		map_index = 0;
 		buf_index = 0;
@@ -558,14 +559,14 @@ void *iova_to_vaddr(struct rxe_mr *mr, u64 iova, int length)
 	}
 
 	lookup_iova(mr, iova, &m, &n, &offset);
-#if 1
 //	pr_info("file:%s +%d, m:%d, n:%d caller:%pS\n", __FILE__, __LINE__, m, n, __builtin_return_address(0));
+
 	if (mr->cur_map_set->map[m]->buf[n].size == 0) {
 		rxe_pin_user_pages(mr->umem, mr->cur_map_set->va, mr->access, 1);
-		mr->cur_map_set->map[m]->buf[n].addr = mr->umem->sgt_append.prv->dma_address;//(uintptr_t)kzalloc(PAGE_SIZE, GFP_ATOMIC);
+		mr->cur_map_set->map[m]->buf[n].addr = mr->umem->sgt_append.prv->dma_address;
 		mr->cur_map_set->map[m]->buf[n].size = PAGE_SIZE;
 	}
-#endif
+
 	if (offset + length > mr->cur_map_set->map[m]->buf[n].size) {
 		pr_warn("crosses page boundary\n");
 		addr = NULL;
