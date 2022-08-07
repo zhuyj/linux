@@ -623,12 +623,12 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 #if 1
 	//pr_info("file: %s +%d, func: %s, length:%d, lkey:0x%x, rkey:0x%x, m:%d, i:%d, start:%llx, caller:%pS\n", __FILE__, __LINE__, __func__, length, mr->lkey, mr->rkey, m, i,mr->cur_map_set->va, __builtin_return_address(0));
 	if (buf->size == 0) {
-		if (in_task()) {
-			rxe_pin_user_pages(mr->umem, mr->cur_map_set->va, mr->access, 1);
+//		if (in_task()) {
+//			rxe_pin_user_pages(mr->umem, mr->cur_map_set->va, mr->access, 1);
 		//	pr_info("file: %s +%d, %d, 0x%llx, caller:%pS\n", __FILE__, __LINE__, mr->umem->sgt_append.sgt.nents, mr->umem->sgt_append.prv->dma_address, __builtin_return_address(0));
-			buf->addr = mr->umem->sgt_append.prv->dma_address;//(uintptr_t)kzalloc(PAGE_SIZE, GFP_ATOMIC);
-			buf->size = PAGE_SIZE;
-		} else if (!in_task()) {
+//			buf->addr = mr->umem->sgt_append.prv->dma_address;//(uintptr_t)kzalloc(PAGE_SIZE, GFP_ATOMIC);
+//			buf->size = PAGE_SIZE;
+//		} else if (!in_task()) {
 			struct ib_umem *umem = mr->umem;
 			int ret;
 			struct page *page_d;
@@ -655,27 +655,11 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 
 			ret = ib_dma_map_sgtable_attrs(umem->ibdev, &umem->sgt_append.sgt,
 						       DMA_BIDIRECTIONAL, dma_attr);
-#if 0
-	{
-		struct sg_page_iter     sg_iter;
-		void                    *vaddr;
-
-		for_each_sgtable_page (&umem->sgt_append.sgt, &sg_iter, 0) {
-			vaddr = page_address(sg_page_iter_page(&sg_iter));
-			if (!vaddr) {
-				pr_warn("%s: Unable to get virtual address\n",
-						__func__);
-			}
-
-			pr_info("file: %s +%d, addr:0x%lx, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)vaddr, __builtin_return_address(0));
-	       }
-	}
-#endif
 			//pr_info("file: %s +%d, 0x%lx, %d, %lu, 0x%llx, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)page_d, umem->sgt_append.sgt.nents, ib_umem_num_pages(umem), mr->umem->sgt_append.prv->dma_address, __builtin_return_address(0));
 			buf->addr = (uintptr_t)page_d;
 			buf->size = PAGE_SIZE;
 			//free_page((unsigned long)page_d);
-		}
+//		}
 	}
 #endif
 	while (length > 0) {
