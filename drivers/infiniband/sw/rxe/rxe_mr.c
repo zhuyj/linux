@@ -324,7 +324,7 @@ int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
 
 	odp->private = mr;
 	odp->npages = ib_umem_num_pages(umem);
-//	pr_info("file %s +%d, %s, %pS\n", __FILE__, __LINE__, __func__, __builtin_return_address(0));
+
 	return 0;
 }
 
@@ -343,7 +343,6 @@ static void lookup_iova(struct rxe_mr *mr, u64 iova, int *m_out, int *n_out,
 		offset >>= set->page_shift;
 		*n_out = offset & mr->map_mask;
 		*m_out = offset >> mr->map_shift;
-	//	pr_info("File: %s +%d, offset:%zu,offset_out:%zu, n_out:%d, m_out:%d, %pS\n", __FILE__, __LINE__, offset, *offset_out, *n_out, *m_out, __builtin_return_address(0));
 	} else {
 		map_index = 0;
 		buf_index = 0;
@@ -369,7 +368,8 @@ static void lookup_iova(struct rxe_mr *mr, u64 iova, int *m_out, int *n_out,
 	}
 }
 
-static struct page *rxe_alloc_memory(struct rxe_mr *mr) {
+static struct page *rxe_alloc_memory(struct rxe_mr *mr)
+{
 	struct ib_umem *umem = mr->umem;
 	int ret;
 	struct page *page_d;
@@ -383,11 +383,13 @@ static struct page *rxe_alloc_memory(struct rxe_mr *mr) {
 	}
 
 	page_d = (struct page *)PAGE_ALIGN((unsigned long)page_d);
+
 	ret = sg_alloc_append_table_from_pages(
 			&umem->sgt_append, &page_d, 1, 0,
 			1 << PAGE_SHIFT, ib_dma_max_seg_size(umem->ibdev),
 			left_nents, GFP_ATOMIC);
 	if (ret) {
+		pr_warn("Append table failure, %s", __func__);
 		free_page((unsigned long)page_d);
 		return ERR_PTR(ret);
 	}
@@ -429,7 +431,6 @@ void *iova_to_vaddr(struct rxe_mr *mr, u64 iova, int length)
 	}
 
 	lookup_iova(mr, iova, &m, &n, &offset);
-//	pr_info("file:%s +%d, m:%d, n:%d caller:%pS\n", __FILE__, __LINE__, m, n, __builtin_return_address(0));
 
 	if (mr->cur_map_set->map[m]->buf[n].size == 0) {
 		mr->cur_map_set->map[m]->buf[n].addr = (uintptr_t)rxe_alloc_memory(mr);
@@ -490,9 +491,8 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 	map = mr->cur_map_set->map + m;
 	buf = map[0]->buf + i;
 
-	//pr_info("file: %s +%d, func: %s, length:%d, lkey:0x%x, rkey:0x%x, m:%d, i:%d, start:%llx, caller:%pS\n", __FILE__, __LINE__, __func__, length, mr->lkey, mr->rkey, m, i,mr->cur_map_set->va, __builtin_return_address(0));
 	if (buf->size == 0) {
-		buf->addr = (uintptr_t)rxe_alloc_memory(mr);//(uintptr_t)page_d;
+		buf->addr = (uintptr_t)rxe_alloc_memory(mr);
 		buf->size = PAGE_SIZE;
 	}
 
@@ -513,7 +513,6 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 
 		length	-= bytes;
 		//addr	+= bytes;
-		//pr_info("file: %s +%d, func: %s, addr:0x%x, bytes:%d, length:%d, caller:%pS\n", __FILE__, __LINE__, __func__, addr, bytes, length, __builtin_return_address(0));
 
 		offset	= 0;
 		buf++;
