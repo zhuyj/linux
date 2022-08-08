@@ -275,6 +275,7 @@ err1:
 	return err;
 }
 
+#if 0
 void rxe_pin_user_pages(struct ib_umem *umem, u64 start, int access, int num_buf)
 {
 	struct mm_struct *mm;
@@ -340,7 +341,7 @@ void rxe_pin_user_pages(struct ib_umem *umem, u64 start, int access, int num_buf
 
 	free_page((unsigned long)page_list);
 }
-
+#endif
 extern struct mmu_interval_notifier_ops rxe_mn_ops;
 
 int rxe_create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
