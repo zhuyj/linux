@@ -599,37 +599,7 @@ void *iova_to_vaddr(struct rxe_mr *mr, u64 iova, int length)
 //	pr_info("file:%s +%d, m:%d, n:%d caller:%pS\n", __FILE__, __LINE__, m, n, __builtin_return_address(0));
 
 	if (mr->cur_map_set->map[m]->buf[n].size == 0) {
-#if 0
-		struct ib_umem *umem = mr->umem;
-		int ret;
-		struct page *page_d;
-		int left_nents = ib_umem_num_pages(umem) - umem->sgt_append.sgt.nents - 1;
-		unsigned long dma_attr = 0;
-
-		page_d = (struct page *)__get_free_page(GFP_ATOMIC);
-	//	pr_info("file: %s +%d, 0x%lx, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)page_d, __builtin_return_address(0));
-		page_d = (struct page *)PAGE_ALIGN((unsigned long)page_d);
-		//page_d = (struct page *)ALIGN((unsigned long)(page_d), sizeof(u32));
-		//pr_info("file: %s +%d, 0x%lx, 0x%lx, left_nents:%d, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)page_d, (uintptr_t)(*page_d), left_nents, __builtin_return_address(0));
-		ret = sg_alloc_append_table_from_pages(
-				&umem->sgt_append, &page_d, 1, 0,
-				1 << PAGE_SHIFT, ib_dma_max_seg_size(umem->ibdev),
-				left_nents, GFP_ATOMIC);
-		if (ret) {
-//			unpin_user_pages_dirty_lock(&page_d, 1, 0);
-			pr_info("file: %s +%d, ret:%d\n", __FILE__, __LINE__, ret);
-//                      goto umem_release;
-		}
-
-		if (mr->access & IB_ACCESS_RELAXED_ORDERING)
-			dma_attr |= DMA_ATTR_WEAK_ORDERING;
-
-		ret = ib_dma_map_sgtable_attrs(umem->ibdev, &umem->sgt_append.sgt,
-					       DMA_BIDIRECTIONAL, dma_attr);
-
-//		rxe_pin_user_pages(mr->umem, mr->cur_map_set->va, mr->access, 1);
-#endif
-		mr->cur_map_set->map[m]->buf[n].addr = (uintptr_t)rxe_alloc_memory(mr); //mr->umem->sgt_append.prv->dma_address;
+		mr->cur_map_set->map[m]->buf[n].addr = (uintptr_t)rxe_alloc_memory(mr);
 		mr->cur_map_set->map[m]->buf[n].size = PAGE_SIZE;
 	}
 
@@ -689,38 +659,8 @@ int rxe_mr_copy(struct rxe_mr *mr, u64 iova, void *addr, int length,
 
 	//pr_info("file: %s +%d, func: %s, length:%d, lkey:0x%x, rkey:0x%x, m:%d, i:%d, start:%llx, caller:%pS\n", __FILE__, __LINE__, __func__, length, mr->lkey, mr->rkey, m, i,mr->cur_map_set->va, __builtin_return_address(0));
 	if (buf->size == 0) {
-#if 0
-		struct ib_umem *umem = mr->umem;
-		int ret;
-		struct page *page_d;
-		int left_nents = ib_umem_num_pages(umem) - umem->sgt_append.sgt.nents - 1;
-		unsigned long dma_attr = 0;
-
-		page_d = (struct page *)__get_free_page(GFP_ATOMIC);
-	//	pr_info("file: %s +%d, 0x%lx, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)page_d, __builtin_return_address(0));
-		page_d = (struct page *)PAGE_ALIGN((unsigned long)page_d);
-		//page_d = (struct page *)ALIGN((unsigned long)(page_d), sizeof(u32));
-		//pr_info("file: %s +%d, 0x%lx, 0x%lx, left_nents:%d, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)page_d, (uintptr_t)(*page_d), left_nents, __builtin_return_address(0));
-		ret = sg_alloc_append_table_from_pages(
-				&umem->sgt_append, &page_d, 1, 0,
-				1 << PAGE_SHIFT, ib_dma_max_seg_size(umem->ibdev),
-				left_nents, GFP_ATOMIC);
-		if (ret) {
-//			unpin_user_pages_dirty_lock(&page_d, 1, 0);
-			pr_info("file: %s +%d, ret:%d\n", __FILE__, __LINE__, ret);
-//                      goto umem_release;
-		}
-
-		if (mr->access & IB_ACCESS_RELAXED_ORDERING)
-			dma_attr |= DMA_ATTR_WEAK_ORDERING;
-
-		ret = ib_dma_map_sgtable_attrs(umem->ibdev, &umem->sgt_append.sgt,
-					       DMA_BIDIRECTIONAL, dma_attr);
-		//pr_info("file: %s +%d, 0x%lx, %d, %lu, 0x%llx, caller:%pS\n", __FILE__, __LINE__, (uintptr_t)page_d, umem->sgt_append.sgt.nents, ib_umem_num_pages(umem), mr->umem->sgt_append.prv->dma_address, __builtin_return_address(0));
-#endif
 		buf->addr = (uintptr_t)rxe_alloc_memory(mr);//(uintptr_t)page_d;
 		buf->size = PAGE_SIZE;
-		//free_page((unsigned long)page_d);
 	}
 
 	while (length > 0) {
