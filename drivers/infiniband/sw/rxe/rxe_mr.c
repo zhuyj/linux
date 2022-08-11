@@ -404,6 +404,7 @@ static struct page *rxe_alloc_memory(struct rxe_mr *mr)
 		return ERR_PTR(ret);
 
 	}
+
 	return page_d;
 }
 
@@ -811,6 +812,10 @@ int rxe_dereg_mr(struct ib_mr *ibmr, struct ib_udata *udata)
 void rxe_mr_cleanup(struct rxe_pool_elem *elem)
 {
 	struct rxe_mr *mr = container_of(elem, typeof(*mr), elem);
+
+	if (mr->umem && mr->umem->is_odp) {
+		sg_free_append_table(&mr->umem->sgt_append);
+	}
 
 	ib_umem_release(mr->umem);
 
