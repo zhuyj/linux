@@ -168,7 +168,6 @@ static int mlx5_netdev_event(struct notifier_block *this,
 	u32 port_num = roce->native_port_num;
 	struct mlx5_core_dev *mdev;
 	struct mlx5_ib_dev *ibdev;
-	int ret = 0;
 
 	ibdev = roce->dev;
 	mdev = mlx5_ib_get_native_port_mdev(ibdev, port_num, NULL);
@@ -184,14 +183,6 @@ static int mlx5_netdev_event(struct notifier_block *this,
 		if (ndev->dev.parent == mdev->device)
 			roce->netdev = ndev;
 		write_unlock(&roce->netdev_lock);
-		if (ndev->dev.parent == mdev->device) {
-			ret = ib_device_set_netdev(&ibdev->ib_dev, ndev, port_num);
-			if (ret) {
-				pr_warn("func: %s, error: %d\n", __func__, ret);
-				goto done;
-			}
-		}
-
 		break;
 
 	case NETDEV_UNREGISTER:
@@ -200,15 +191,6 @@ static int mlx5_netdev_event(struct notifier_block *this,
 		if (roce->netdev == ndev)
 			roce->netdev = NULL;
 		write_unlock(&roce->netdev_lock);
-
-		if (roce->netdev == ndev) {
-			ret = ib_device_set_netdev(&ibdev->ib_dev, NULL, port_num);
-			if (ret) {
-				pr_warn("func: %s, error: %d\n", __func__, ret);
-				goto done;
-			}
-		}
-
 		break;
 
 	case NETDEV_CHANGE:
