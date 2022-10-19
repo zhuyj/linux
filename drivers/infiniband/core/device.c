@@ -2758,11 +2758,13 @@ static struct ib_device *get_ibdev_from_ndev(struct net_device *ndev)
 			if (!ndev)
 				continue;
 
+			dev_put(ndev);
 			if (ndev == netdev) {
-				dev_put(ndev);
+				up_read(&devices_rwsem);
+				if (!ib_device_try_get(dev))
+					dev = NULL;
 				return dev;
 			}
-			dev_put(ndev);
 		}
 	}
 	up_read(&devices_rwsem);
