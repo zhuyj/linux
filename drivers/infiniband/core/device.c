@@ -2747,11 +2747,11 @@ static struct ib_device *get_ibdev_from_ndev(struct net_device *ndev)
 	int i;
 
 	down_read(&devices_rwsem);
-	xa_for_each_marked (&devices, index, dev, DEVICE_REGISTERED) {
+	xa_for_each_marked(&devices, index, dev, DEVICE_REGISTERED) {
 		if (!dev->ops.get_netdev)
 			continue;
 
-		for (i=0; i<dev->phys_port_cnt; i++) {
+		for (i = 0; i < dev->phys_port_cnt; i++) {
 			struct net_device *netdev;
 
 			netdev = dev->ops.get_netdev(dev, i+1);
