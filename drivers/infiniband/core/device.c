@@ -140,13 +140,8 @@ MODULE_PARM_DESC(netns_mode,
  */
 bool rdma_dev_access_netns(const struct ib_device *dev, const struct net *net)
 {
-	/* ib_devices_shared_netns is only for IB device. */
-	if (rdma_protocol_ib(dev, rdma_start_port(dev))) {
-		return (ib_devices_shared_netns ||
-			net_eq(read_pnet(&dev->coredev.rdma_net), net));
-	} else { /* Others device */
-		return net_eq(read_pnet(&dev->coredev.rdma_net), net);
-	}
+	return (ib_devices_shared_netns ||
+		net_eq(read_pnet(&dev->coredev.rdma_net), net));
 }
 EXPORT_SYMBOL(rdma_dev_access_netns);
 
@@ -2748,12 +2743,6 @@ static int rdma_netns_notify(struct notifier_block *not_blk,
 
 	if (!ibdev)
 		return NOTIFY_OK;
-
-	/* This will exclude IB device */
-	if (rdma_protocol_ib(ibdev, rdma_start_port(ibdev))) {
-		ib_device_put(ibdev);
-		return NOTIFY_OK;
-	}
 
 	switch (event) {
 	case NETDEV_REGISTER:
