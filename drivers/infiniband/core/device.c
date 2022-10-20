@@ -2735,54 +2735,6 @@ int ib_dma_virt_map_sg(struct ib_device *dev, struct scatterlist *sg, int nents)
 EXPORT_SYMBOL(ib_dma_virt_map_sg);
 #endif /* CONFIG_INFINIBAND_VIRT_DMA */
 
-static int rdma_netns_notify(struct notifier_block *not_blk,
-			     unsigned long event, void *arg)
-{
-	struct net_device *ndev = netdev_notifier_info_to_dev(arg);
-	struct ib_device *ibdev = ib_device_get_by_netdev(ndev, RDMA_DRIVER_UNKNOWN);
-
-	if (!ibdev)
-		return NOTIFY_OK;
-
-	switch (event) {
-	case NETDEV_REGISTER:
-		ib_device_put(ibdev);
-		if (!net_eq(read_pnet(&ibdev->coredev.rdma_net), dev_net(ndev))) {
-			int ret = 0;
-
-			get_device(&ibdev->dev);
-			ret = rdma_dev_change_netns(ibdev,
-						    read_pnet(&ibdev->coredev.rdma_net),
-						    dev_net(ndev));
-			if (ret) {
-				put_device(&ibdev->dev);
-				return NOTIFY_OK;
-			}
-			put_device(&ibdev->dev);
-		}
-		break;
-	case NETDEV_UNREGISTER:
-		ib_device_put(ibdev);
-		break;
-	case NETDEV_REBOOT:
-	case NETDEV_GOING_DOWN:
-	case NETDEV_CHANGEADDR:
-	case NETDEV_CHANGENAME:
-	case NETDEV_FEAT_CHANGE:
-	default:
-		ib_device_put(ibdev);
-		pr_info("ignoring netdev event = %ld for %s\n",
-			event, ndev->name);
-		break;
-	}
-
-	return NOTIFY_OK;
-}
-
-static struct notifier_block rdma_netns_notifier = {
-	.notifier_call = rdma_netns_notify,
-};
-
 static const struct rdma_nl_cbs ibnl_ls_cb_table[RDMA_NL_LS_NUM_OPS] = {
 	[RDMA_NL_LS_OP_RESOLVE] = {
 		.doit = ib_nl_handle_resolve_resp,
@@ -2865,16 +2817,8 @@ static int __init ib_core_init(void)
 	rdma_nl_register(RDMA_NL_LS, ibnl_ls_cb_table);
 	roce_gid_mgmt_init();
 
-	ret = register_netdevice_notifier(&rdma_netns_notifier);
-	if (ret) {
-		pr_err("Failed to register netdev notifier\n");
-		goto err_netdevice;
-	}
-
 	return 0;
 
-err_netdevice:
-	unregister_pernet_device(&rdma_dev_net_ops);
 err_compat:
 	unregister_blocking_lsm_notifier(&ibdev_lsm_nb);
 err_sa:
@@ -2898,7 +2842,6 @@ err:
 
 static void __exit ib_core_cleanup(void)
 {
-	unregister_netdevice_notifier(&rdma_netns_notifier);
 	roce_gid_mgmt_cleanup();
 	nldev_exit();
 	rdma_nl_unregister(RDMA_NL_LS);
