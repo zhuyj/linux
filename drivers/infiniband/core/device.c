@@ -2755,10 +2755,10 @@ static struct ib_device *get_ibdev_from_ndev(struct net_device *ndev)
 			struct net_device *netdev;
 
 			netdev = dev->ops.get_netdev(dev, i+1);
-			if (!netdev)
+			if (!ndev)
 				continue;
 
-			dev_put(netdev);
+			dev_put(ndev);
 			if (ndev == netdev) {
 				up_read(&devices_rwsem);
 				if (!ib_device_try_get(dev))
