@@ -2366,88 +2366,6 @@ static int irdma_setup_pbles(struct irdma_pci_f *rf, struct irdma_mr *iwmr,
 }
 
 /**
- * irdma_handle_q_mem - handle memory for qp and cq
- * @iwdev: irdma device
- * @req: information for q memory management
- * @iwpbl: pble struct
- * @use_pbles: flag to use pble
- */
-static int irdma_handle_q_mem(struct irdma_device *iwdev,
-			      struct irdma_mem_reg_req *req,
-			      struct irdma_pbl *iwpbl, bool use_pbles)
-{
-	struct irdma_pble_alloc *palloc = &iwpbl->pble_alloc;
-	struct irdma_mr *iwmr = iwpbl->iwmr;
-	struct irdma_qp_mr *qpmr = &iwpbl->qp_mr;
-	struct irdma_cq_mr *cqmr = &iwpbl->cq_mr;
-	struct irdma_hmc_pble *hmc_p;
-	u64 *arr = iwmr->pgaddrmem;
-	u32 pg_size, total;
-	int err = 0;
-	bool ret = true;
-
-	pg_size = iwmr->page_size;
-	err = irdma_setup_pbles(iwdev->rf, iwmr, use_pbles, true);
-	if (err)
-		return err;
-
-	if (use_pbles)
-		arr = palloc->level1.addr;
-
-	switch (iwmr->type) {
-	case IRDMA_MEMREG_TYPE_QP:
-		total = req->sq_pages + req->rq_pages;
-		hmc_p = &qpmr->sq_pbl;
-		qpmr->shadow = (dma_addr_t)arr[total];
-
-		if (use_pbles) {
-			ret = irdma_check_mem_contiguous(arr, req->sq_pages,
-							 pg_size);
-			if (ret)
-				ret = irdma_check_mem_contiguous(&arr[req->sq_pages],
-								 req->rq_pages,
-								 pg_size);
-		}
-
-		if (!ret) {
-			hmc_p->idx = palloc->level1.idx;
-			hmc_p = &qpmr->rq_pbl;
-			hmc_p->idx = palloc->level1.idx + req->sq_pages;
-		} else {
-			hmc_p->addr = arr[0];
-			hmc_p = &qpmr->rq_pbl;
-			hmc_p->addr = arr[req->sq_pages];
-		}
-		break;
-	case IRDMA_MEMREG_TYPE_CQ:
-		hmc_p = &cqmr->cq_pbl;
-
-		if (!cqmr->split)
-			cqmr->shadow = (dma_addr_t)arr[req->cq_pages];
-
-		if (use_pbles)
-			ret = irdma_check_mem_contiguous(arr, req->cq_pages,
-							 pg_size);
-
-		if (!ret)
-			hmc_p->idx = palloc->level1.idx;
-		else
-			hmc_p->addr = arr[0];
-	break;
-	default:
-		ibdev_dbg(&iwdev->ibdev, "VERBS: MR type error\n");
-		err = -EINVAL;
-	}
-
-	if (use_pbles && ret) {
-		irdma_free_pble(iwdev->rf->pble_rsrc, palloc);
-		iwpbl->pbl_allocated = false;
-	}
-
-	return err;
-}
-
-/**
  * irdma_hw_alloc_mw - create the hw memory window
  * @iwdev: irdma device
  * @iwmr: pointer to memory window info
@@ -2760,16 +2678,12 @@ static struct ib_mr *irdma_reg_user_mr(struct ib_pd *pd, u64 start, u64 len,
 {
 #define IRDMA_MEM_REG_MIN_REQ_LEN offsetofend(struct irdma_mem_reg_req, sq_pages)
 	struct irdma_device *iwdev = to_iwdev(pd->device);
-	struct irdma_ucontext *ucontext;
 	struct irdma_pble_alloc *palloc;
 	struct irdma_pbl *iwpbl;
 	struct irdma_mr *iwmr;
 	struct ib_umem *region;
-	struct irdma_mem_reg_req req;
-	u32 total, stag = 0;
-	u8 shadow_pgcnt = 1;
+	u32 stag = 0;
 	bool use_pbles = false;
-	unsigned long flags;
 	int err = -EINVAL;
 	int ret;
 
@@ -2787,11 +2701,6 @@ static struct ib_mr *irdma_reg_user_mr(struct ib_pd *pd, u64 start, u64 len,
 		return (struct ib_mr *)region;
 	}
 
-	if (ib_copy_from_udata(&req, udata, min(sizeof(req), udata->inlen))) {
-		ib_umem_release(region);
-		return ERR_PTR(-EFAULT);
-	}
-
 	iwmr = kzalloc(sizeof(*iwmr), GFP_KERNEL);
 	if (!iwmr) {
 		ib_umem_release(region);
@@ -2804,102 +2713,51 @@ static struct ib_mr *irdma_reg_user_mr(struct ib_pd *pd, u64 start, u64 len,
 	iwmr->ibmr.pd = pd;
 	iwmr->ibmr.device = pd->device;
 	iwmr->ibmr.iova = virt;
-	iwmr->page_size = PAGE_SIZE;
+	iwmr->type = IRDMA_MEMREG_TYPE_MEM;
 
-	if (req.reg_type == IRDMA_MEMREG_TYPE_MEM) {
-		iwmr->page_size = ib_umem_find_best_pgsz(region,
-							 iwdev->rf->sc_dev.hw_attrs.page_size_cap,
-							 virt);
-		if (unlikely(!iwmr->page_size)) {
-			kfree(iwmr);
-			ib_umem_release(region);
-			return ERR_PTR(-EOPNOTSUPP);
-		}
+	iwmr->page_size = ib_umem_find_best_pgsz(region,
+						 iwdev->rf->sc_dev.hw_attrs.page_size_cap,
+						 virt);
+	if (unlikely(!iwmr->page_size)) {
+		kfree(iwmr);
+		ib_umem_release(region);
+		return ERR_PTR(-EOPNOTSUPP);
 	}
+
 	iwmr->len = region->length;
 	iwpbl->user_base = virt;
 	palloc = &iwpbl->pble_alloc;
-	iwmr->type = req.reg_type;
 	iwmr->page_cnt = ib_umem_num_dma_blocks(region, iwmr->page_size);
 
-	switch (req.reg_type) {
-	case IRDMA_MEMREG_TYPE_QP:
-		total = req.sq_pages + req.rq_pages + shadow_pgcnt;
-		if (total > iwmr->page_cnt) {
-			err = -EINVAL;
-			goto error;
+	use_pbles = (iwmr->page_cnt != 1);
+
+	err = irdma_setup_pbles(iwdev->rf, iwmr, use_pbles, false);
+	if (err)
+		goto error;
+
+	if (use_pbles) {
+		ret = irdma_check_mr_contiguous(palloc,
+						iwmr->page_size);
+		if (ret) {
+			irdma_free_pble(iwdev->rf->pble_rsrc, palloc);
+			iwpbl->pbl_allocated = false;
 		}
-		total = req.sq_pages + req.rq_pages;
-		use_pbles = (total > 2);
-		err = irdma_handle_q_mem(iwdev, &req, iwpbl, use_pbles);
-		if (err)
-			goto error;
+	}
 
-		ucontext = rdma_udata_to_drv_context(udata, struct irdma_ucontext,
-						     ibucontext);
-		spin_lock_irqsave(&ucontext->qp_reg_mem_list_lock, flags);
-		list_add_tail(&iwpbl->list, &ucontext->qp_reg_mem_list);
-		iwpbl->on_list = true;
-		spin_unlock_irqrestore(&ucontext->qp_reg_mem_list_lock, flags);
-		break;
-	case IRDMA_MEMREG_TYPE_CQ:
-		if (iwdev->rf->sc_dev.hw_attrs.uk_attrs.feature_flags & IRDMA_FEATURE_CQ_RESIZE)
-			shadow_pgcnt = 0;
-		total = req.cq_pages + shadow_pgcnt;
-		if (total > iwmr->page_cnt) {
-			err = -EINVAL;
-			goto error;
-		}
-
-		use_pbles = (req.cq_pages > 1);
-		err = irdma_handle_q_mem(iwdev, &req, iwpbl, use_pbles);
-		if (err)
-			goto error;
-
-		ucontext = rdma_udata_to_drv_context(udata, struct irdma_ucontext,
-						     ibucontext);
-		spin_lock_irqsave(&ucontext->cq_reg_mem_list_lock, flags);
-		list_add_tail(&iwpbl->list, &ucontext->cq_reg_mem_list);
-		iwpbl->on_list = true;
-		spin_unlock_irqrestore(&ucontext->cq_reg_mem_list_lock, flags);
-		break;
-	case IRDMA_MEMREG_TYPE_MEM:
-		use_pbles = (iwmr->page_cnt != 1);
-
-		err = irdma_setup_pbles(iwdev->rf, iwmr, use_pbles, false);
-		if (err)
-			goto error;
-
-		if (use_pbles) {
-			ret = irdma_check_mr_contiguous(palloc,
-							iwmr->page_size);
-			if (ret) {
-				irdma_free_pble(iwdev->rf->pble_rsrc, palloc);
-				iwpbl->pbl_allocated = false;
-			}
-		}
-
-		stag = irdma_create_stag(iwdev);
-		if (!stag) {
-			err = -ENOMEM;
-			goto error;
-		}
-
-		iwmr->stag = stag;
-		iwmr->ibmr.rkey = stag;
-		iwmr->ibmr.lkey = stag;
-		err = irdma_hwreg_mr(iwdev, iwmr, access);
-		if (err) {
-			irdma_free_stag(iwdev, stag);
-			goto error;
-		}
-
-		break;
-	default:
+	stag = irdma_create_stag(iwdev);
+	if (!stag) {
+		err = -ENOMEM;
 		goto error;
 	}
 
-	iwmr->type = req.reg_type;
+	iwmr->stag = stag;
+	iwmr->ibmr.rkey = stag;
+	iwmr->ibmr.lkey = stag;
+	err = irdma_hwreg_mr(iwdev, iwmr, access);
+	if (err) {
+		irdma_free_stag(iwdev, stag);
+		goto error;
+	}
 
 	return &iwmr->ibmr;
 
