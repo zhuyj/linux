@@ -2975,7 +2975,8 @@ static struct ib_mr *irdma_reg_user_mr_dmabuf(struct ib_pd *pd, u64 start,
 		goto error;
 
 	if (use_pbles) {
-		err = irdma_check_mr_contiguous(palloc,	iwmr->page_size);
+		err = irdma_check_mr_contiguous(palloc,
+						iwmr->page_size);
 		if (err) {
 			irdma_free_pble(iwdev->rf->pble_rsrc, palloc);
 			iwpbl->pbl_allocated = false;
