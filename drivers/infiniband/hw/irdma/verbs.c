@@ -2744,7 +2744,7 @@ static int irdma_hwreg_mr(struct irdma_device *iwdev, struct irdma_mr *iwmr,
 
 	return ret;
 }
-
+#if 0
 static int irdma_reg_user_mr_type_mem(struct irdma_device *iwdev,
 				      struct irdma_mr *iwmr, int access,
 				      struct irdma_pbl *iwpbl)
@@ -2764,13 +2764,12 @@ static int irdma_reg_user_mr_type_mem(struct irdma_device *iwdev,
 						iwmr->page_size);
 		if (err) {
 			irdma_free_pble(iwdev->rf->pble_rsrc, &iwpbl->pble_alloc);
-			return err;
+			iwpbl->pbl_allocated = false;
 		}
 	}
 
 	stag = irdma_create_stag(iwdev);
 	if (!stag) {
-		irdma_free_pble(iwdev->rf->pble_rsrc, &iwpbl->pble_alloc);
 		return -ENOMEM;
 	}
 
@@ -2780,13 +2779,12 @@ static int irdma_reg_user_mr_type_mem(struct irdma_device *iwdev,
 	err = irdma_hwreg_mr(iwdev, iwmr, access);
 	if (err) {
 		irdma_free_stag(iwdev, stag);
-		irdma_free_pble(iwdev->rf->pble_rsrc, &iwpbl->pble_alloc);
 		return err;
 	}
 
 	return err;
 }
-
+#endif
 /**
  * irdma_reg_user_mr - Register a user memory region
  * @pd: ptr of pd
@@ -2803,6 +2801,7 @@ static struct ib_mr *irdma_reg_user_mr(struct ib_pd *pd, u64 start, u64 len,
 #define IRDMA_MEM_REG_MIN_REQ_LEN offsetofend(struct irdma_mem_reg_req, sq_pages)
 	struct irdma_device *iwdev = to_iwdev(pd->device);
 	struct irdma_ucontext *ucontext;
+	struct irdma_pble_alloc *palloc;
 	struct irdma_pbl *iwpbl;
 	struct irdma_mr *iwmr;
 	struct ib_umem *region;
@@ -2858,6 +2857,7 @@ static struct ib_mr *irdma_reg_user_mr(struct ib_pd *pd, u64 start, u64 len,
 	}
 	iwmr->len = region->length;
 	iwpbl->user_base = virt;
+	palloc = &iwpbl->pble_alloc;
 	iwmr->type = req.reg_type;
 	iwmr->page_cnt = ib_umem_num_dma_blocks(region, iwmr->page_size);
 
@@ -2903,9 +2903,47 @@ static struct ib_mr *irdma_reg_user_mr(struct ib_pd *pd, u64 start, u64 len,
 		spin_unlock_irqrestore(&ucontext->cq_reg_mem_list_lock, flags);
 		break;
 	case IRDMA_MEMREG_TYPE_MEM:
+#if 0
 		err = irdma_reg_user_mr_type_mem(iwdev, iwmr, access, iwpbl);
 		if (err)
 			goto error;
+#endif
+#if 1
+		{
+		bool use_pbles = false;
+		u32 stag;
+
+		use_pbles = (iwmr->page_cnt != 1);
+
+		err = irdma_setup_pbles(iwdev->rf, iwmr, use_pbles, false);
+		if (err)
+			goto error;
+
+		if (use_pbles) {
+			err = irdma_check_mr_contiguous(palloc,
+							iwmr->page_size);
+			if (err) {
+				irdma_free_pble(iwdev->rf->pble_rsrc, palloc);
+				iwpbl->pbl_allocated = false;
+			}
+		}
+
+		stag = irdma_create_stag(iwdev);
+		if (!stag) {
+			err = -ENOMEM;
+			goto error;
+		}
+
+		iwmr->stag = stag;
+		iwmr->ibmr.rkey = stag;
+		iwmr->ibmr.lkey = stag;
+		err = irdma_hwreg_mr(iwdev, iwmr, access);
+		if (err) {
+			irdma_free_stag(iwdev, stag);
+			goto error;
+		}
+		}
+#endif
 		break;
 	default:
 		goto error;
@@ -2916,6 +2954,8 @@ static struct ib_mr *irdma_reg_user_mr(struct ib_pd *pd, u64 start, u64 len,
 	return &iwmr->ibmr;
 
 error:
+	if (palloc->level != PBLE_LEVEL_0 && iwpbl->pbl_allocated)
+		irdma_free_pble(iwdev->rf->pble_rsrc, palloc);
 	ib_umem_release(region);
 	kfree(iwmr);
 
