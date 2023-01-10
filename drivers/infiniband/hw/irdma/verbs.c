@@ -2745,9 +2745,9 @@ static int irdma_hwreg_mr(struct irdma_device *iwdev, struct irdma_mr *iwmr,
 	return ret;
 }
 
-static int irdma_reg_user_mr_type_mem(struct irdma_mr *iwmr, int access)
+static int irdma_reg_user_mr_type_mem(struct irdma_device *iwdev,
+				      struct irdma_mr *iwmr, int access)
 {
-	struct irdma_device *iwdev = to_iwdev(iwmr->ibmr.device);
 	int err = 0;
 	bool use_pbles = false;
 	u32 stag = 0;
@@ -2965,7 +2965,7 @@ static struct ib_mr *irdma_reg_user_mr(struct ib_pd *pd, u64 start, u64 len,
 			goto error;
 		break;
 	case IRDMA_MEMREG_TYPE_MEM:
-		err = irdma_reg_user_mr_type_mem(iwmr, access);
+		err = irdma_reg_user_mr_type_mem(iwdev, iwmr, access);
 		if (err)
 			goto error;
 		break;
