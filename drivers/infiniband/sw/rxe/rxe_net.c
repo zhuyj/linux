@@ -13,6 +13,7 @@
 #include <net/sch_generic.h>
 #include <linux/netfilter.h>
 #include <rdma/ib_addr.h>
+#include <linux/filter.h>
 
 #include "rxe.h"
 #include "rxe_net.h"
@@ -406,6 +407,32 @@ static int rxe_loopback(struct sk_buff *skb, struct rxe_pkt_info *pkt)
 	return 0;
 }
 
+static int rxe_xdp_send(void *arg)
+{
+	struct rxe_dev *rxe = (struct rxe_dev *)arg;
+	struct sk_buff *skb;
+
+	while ((skb = skb_dequeue(&rxe->xdp_tx_pkts))) {
+		u32 xdp_frame_len = skb->len - skb->data_len;
+		char *buf = (char *)(skb->data);
+		struct xdp_buff xdp;
+		struct bpf_prog *xdp_prog = NULL;
+
+		xdp_prog = rxe->ndev->xdp_prog;
+		if (unlikely(xdp_prog == NULL)) {
+			pr_info("func:%s, xdp_prog is NULL\n", __func__);
+			return 1;
+		}
+
+		xdp_init_buff(&xdp, xdp_frame_len, NULL);
+		xdp_prepare_buff(&xdp, buf, 0, xdp_frame_len, true);
+		bpf_prog_run_xdp(xdp_prog, &xdp);
+
+		kfree_skb(skb);
+	}
+	return 1;
+}
+
 int rxe_xmit_packet(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 		    struct sk_buff *skb)
 {
@@ -420,6 +447,11 @@ int rxe_xmit_packet(struct rxe_qp *qp, struct rxe_pkt_info *pkt,
 	}
 
 	rxe_icrc_generate(skb, pkt);
+
+	if (pkt->rxe->ndev->xdp_prog) {
+		skb_queue_tail(&pkt->rxe->xdp_tx_pkts, skb_clone(skb, GFP_ATOMIC));
+		rxe_run_task(&pkt->rxe->xdp_tx_task); /* need tasklet */
+	}
 
 	if (pkt->mask & RXE_LOOPBACK_MASK)
 		err = rxe_loopback(skb, pkt);
@@ -526,6 +558,9 @@ int rxe_net_add(const char *ibdev_name, struct net_device *ndev)
 		ib_dealloc_device(&rxe->ib_dev);
 		return err;
 	}
+
+	skb_queue_head_init(&rxe->xdp_tx_pkts);
+	rxe_init_task(&rxe->xdp_tx_task, rxe, rxe_xdp_send);
 
 	return 0;
 }
