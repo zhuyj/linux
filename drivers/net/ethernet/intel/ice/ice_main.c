@@ -2949,6 +2949,7 @@ static int ice_xdp(struct net_device *dev, struct netdev_bpf *xdp)
 {
 	struct ice_netdev_priv *np = netdev_priv(dev);
 	struct ice_vsi *vsi = np->vsi;
+	struct bpf_prog *old_prog = NULL;
 
 	if (vsi->type != ICE_VSI_PF) {
 		NL_SET_ERR_MSG_MOD(xdp->extack, "XDP can be loaded only on PF VSI");
@@ -2957,6 +2958,21 @@ static int ice_xdp(struct net_device *dev, struct netdev_bpf *xdp)
 
 	switch (xdp->command) {
 	case XDP_SETUP_PROG:
+		if (xdp->flags & XDP_FLAGS_RDMA) {
+			old_prog = xchg(&dev->xdp_prog, xdp->prog);
+			if (old_prog)
+				bpf_prog_put(old_prog);
+			pr_info("File: %s +%d, RDMA, caller:%ps\n", __FILE__, __LINE__, __builtin_return_address(0));
+			netdev_state_change(dev);
+			return 0;
+		} else {
+		        old_prog = xchg(&dev->xdp_prog, NULL);
+		        if (old_prog)
+				bpf_prog_put(old_prog);
+
+			pr_info("File: %s +%d, RDMA no, caller:%ps\n", __FILE__, __LINE__, __builtin_return_address(0));
+			netdev_state_change(dev);
+		}
 		return ice_xdp_setup_prog(vsi, xdp->prog, xdp->extack);
 	case XDP_SETUP_XSK_POOL:
 		return ice_xsk_pool_setup(vsi, xdp->xsk.pool,
