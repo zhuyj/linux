@@ -619,14 +619,16 @@ static void rxe_xdp_setup(struct rxe_dev *rxe)
 	if (rxe->ndev->xdp_prog) {
 		if (rcu_access_pointer(rxe->tx_xdp_prog) == NULL) {
 			pr_info("file: %s +%d, xdp_prog not NULL\n", __FILE__, __LINE__);
-			bpf_prog_add(rxe->ndev->xdp_prog, 1);
+			bpf_prog_add(rxe->ndev->xdp_prog, 2);
 			rcu_assign_pointer(rxe->tx_xdp_prog, rxe->ndev->xdp_prog);
+			rcu_assign_pointer(rxe->rx_xdp_prog, rxe->ndev->xdp_prog);
 		}
 	} else {
 		if (rcu_access_pointer(rxe->tx_xdp_prog)) {
 			pr_info("file: %s +%d, xdp_prog NULL\n", __FILE__, __LINE__);
-			bpf_prog_sub(rxe->ndev->xdp_prog, 1);
+			bpf_prog_sub(rxe->tx_xdp_prog, 2);
 			rcu_assign_pointer(rxe->tx_xdp_prog, NULL);
+			rcu_assign_pointer(rxe->rx_xdp_prog, NULL);
 		}
 	}
 }
