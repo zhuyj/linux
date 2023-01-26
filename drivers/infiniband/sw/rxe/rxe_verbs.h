@@ -372,6 +372,7 @@ struct rxe_dev {
 	struct net_device	*ndev;
 	struct sk_buff_head	xdp_tx_pkts; /* Use for xdp tx skb */
 	struct rxe_task         xdp_tx_task; /* Use for xdp tx task */
+	struct bpf_prog	__rcu	*tx_xdp_prog;
 
 	struct rxe_pool		uc_pool;
 	struct rxe_pool		pd_pool;
