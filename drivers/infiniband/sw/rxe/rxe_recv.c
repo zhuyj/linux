@@ -354,12 +354,15 @@ static int rxe_chk_dgid(struct rxe_dev *rxe, struct sk_buff *skb)
 	return 0;
 }
 
+#include <linux/filter.h>
+
 /* rxe_rcv is called from the interface driver */
 void rxe_rcv(struct sk_buff *skb)
 {
-	int err;
 	struct rxe_pkt_info *pkt = SKB_TO_PKT(skb);
 	struct rxe_dev *rxe = pkt->rxe;
+	struct bpf_prog *xdp_prog = NULL;
+	int err;
 
 	if (unlikely(skb->len < RXE_BTH_BYTES))
 		goto drop;
@@ -386,6 +389,16 @@ void rxe_rcv(struct sk_buff *skb)
 		goto drop;
 
 	rxe_counter_inc(rxe, RXE_CNT_RCVD_PKTS);
+
+	if ((xdp_prog = rcu_access_pointer(pkt->rxe->rx_xdp_prog))) {
+		u32 xdp_frame_len = skb->len - skb->data_len + sizeof(struct iphdr);
+		char *buf = (char *)(skb->data - sizeof(struct iphdr));
+		struct xdp_buff xdp;
+
+		xdp_init_buff(&xdp, xdp_frame_len, NULL);
+		xdp_prepare_buff(&xdp, buf, 0, xdp_frame_len, true);
+		bpf_prog_run_xdp(xdp_prog, &xdp);
+	}
 
 	if (unlikely(bth_qpn(pkt) == IB_MULTICAST_QPN))
 		rxe_rcv_mcast_pkt(rxe, skb);
