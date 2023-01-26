@@ -416,7 +416,7 @@ static int rxe_xdp_send(void *arg)
 		struct xdp_buff xdp;
 		struct bpf_prog *xdp_prog = NULL;
 
-		xdp_prog = rxe->ndev->xdp_prog;
+		xdp_prog = rcu_access_pointer(rxe->tx_xdp_prog);
 		if (unlikely(xdp_prog == NULL)) {
 			pr_info("func:%s, xdp_prog is NULL\n", __func__);
 			return 1;
@@ -541,6 +541,8 @@ const char *rxe_parent_name(struct rxe_dev *rxe, unsigned int port_num)
 	return rxe->ndev->name;
 }
 
+static void rxe_xdp_setup(struct rxe_dev *rxe);
+
 int rxe_net_add(const char *ibdev_name, struct net_device *ndev)
 {
 	int err;
@@ -562,6 +564,7 @@ int rxe_net_add(const char *ibdev_name, struct net_device *ndev)
 	rxe_init_task(rxe, &rxe->xdp_tx_task, rxe,
 			rxe_xdp_send, "rxe_xdp_tx");
 
+	rxe_xdp_setup(rxe);
 	return 0;
 }
 
@@ -610,6 +613,25 @@ void rxe_set_port_state(struct rxe_dev *rxe)
 		rxe_port_down(rxe);
 }
 
+#include <linux/bpf.h>
+
+static void rxe_xdp_setup(struct rxe_dev *rxe)
+{
+	if (rxe->ndev->xdp_prog) {
+		if (rcu_access_pointer(rxe->tx_xdp_prog) == NULL) {
+			pr_info("file: %s +%d, xdp_prog not NULL\n", __FILE__, __LINE__);
+			bpf_prog_add(rxe->ndev->xdp_prog, 1);
+			rcu_assign_pointer(rxe->tx_xdp_prog, rxe->ndev->xdp_prog);
+		}
+	} else {
+		if (rcu_access_pointer(rxe->tx_xdp_prog)) {
+			pr_info("file: %s +%d, xdp_prog NULL\n", __FILE__, __LINE__);
+			bpf_prog_sub(rxe->ndev->xdp_prog, 1);
+			rcu_assign_pointer(rxe->tx_xdp_prog, NULL);
+		}
+	}
+}
+
 static int rxe_notify(struct notifier_block *not_blk,
 		      unsigned long event,
 		      void *arg)
@@ -636,6 +658,7 @@ static int rxe_notify(struct notifier_block *not_blk,
 		break;
 	case NETDEV_CHANGE:
 		rxe_set_port_state(rxe);
+		rxe_xdp_setup(rxe);
 		break;
 	case NETDEV_REBOOT:
 	case NETDEV_GOING_DOWN:
