@@ -12,8 +12,8 @@
  * Per network namespace data
  */
 struct rxe_ns_sock {
-	struct sock *rxe_sk4;
-	struct sock *rxe_sk6;
+	struct sock __rcu *rxe_sk4;
+	struct sock __rcu *rxe_sk6;
 };
 
 /*
@@ -26,39 +26,50 @@ static unsigned int rxe_pernet_id;
  */
 static int __net_init rxe_ns_init(struct net *net)
 {
-	// create (if not present) and access data item in network namespace (net) using the id (net_id)
+	/*
+	 * create (if not present) and access data item in network namespace
+	 * (net) using the id (net_id)
+	 */
 	struct rxe_ns_sock *ns_sk = net_generic(net, rxe_pernet_id);
 
-	ns_sk->rxe_sk4 = NULL; // initialize socket
-	ns_sk->rxe_sk6 = NULL;
+	rcu_assign_pointer(ns_sk->rxe_sk4, NULL); /* initialize sock 4 socket */
+	rcu_assign_pointer(ns_sk->rxe_sk6, NULL); /* initialize sock 6 socket */
 	synchronize_rcu();
-	pr_info("file: %s +%d, %s, rxe_pernet_id: 0x%x, net_cookie: 0x%llx\n", __FILE__, __LINE__, __func__, rxe_pernet_id, net->net_cookie);
 
-	// ...
 	return 0;
 }
 
 static void __net_exit rxe_ns_exit(struct net *net)
 {
-	// called when the network namespace is removed
+	/*
+	 * called when the network namespace is removed
+	 */
 	struct rxe_ns_sock *ns_sk = net_generic(net, rxe_pernet_id);
-	pr_info("file: %s +%d, %s, net_cookie: 0x%llx\n", __FILE__, __LINE__, __func__, net->net_cookie);
+	struct sock *rxe_sk4 = NULL;
+	struct sock *rxe_sk6 = NULL;
 
-	// close socket
-	if (ns_sk->rxe_sk4 && ns_sk->rxe_sk4->sk_socket) {
-		udp_tunnel_sock_release(ns_sk->rxe_sk4->sk_socket);
-		ns_sk->rxe_sk4 = NULL;
+	rcu_read_lock();
+	rxe_sk4 = rcu_dereference(ns_sk->rxe_sk4);
+	rxe_sk6 = rcu_dereference(ns_sk->rxe_sk6);
+	rcu_read_unlock();
+
+	/* close socket */
+	if (rxe_sk4 && rxe_sk4->sk_socket) {
+		udp_tunnel_sock_release(rxe_sk4->sk_socket);
+		rcu_assign_pointer(ns_sk->rxe_sk4, NULL);
 		synchronize_rcu();
 	}
 
-	if (ns_sk->rxe_sk6 && ns_sk->rxe_sk6->sk_socket) {
-		udp_tunnel_sock_release(ns_sk->rxe_sk6->sk_socket);
-		ns_sk->rxe_sk6 = NULL;
+	if (rxe_sk6 && rxe_sk6->sk_socket) {
+		udp_tunnel_sock_release(rxe_sk6->sk_socket);
+		rcu_assign_pointer(ns_sk->rxe_sk6, NULL);
 		synchronize_rcu();
 	}
 }
 
-// callback to make the module network namespace aware
+/*
+ * callback to make the module network namespace aware
+ */
 static struct pernet_operations rxe_net_ops __net_initdata = {
 	.init = rxe_ns_init,
 	.exit = rxe_ns_exit,
@@ -72,7 +83,7 @@ struct sock *rxe_ns_pernet_sk4(struct net *net)
 	struct sock *sk;
 
 	rcu_read_lock();
-	sk = ns_sk->rxe_sk4;
+	sk = rcu_dereference( ns_sk->rxe_sk4);
 	rcu_read_unlock();
 
 	return sk;;
@@ -82,7 +93,7 @@ void rxe_ns_pernet_set_sk4(struct net *net, struct sock *sk)
 {
 	struct rxe_ns_sock *ns_sk = net_generic(net, rxe_pernet_id);
 
-	ns_sk->rxe_sk4 = sk;
+	rcu_assign_pointer(ns_sk->rxe_sk4, sk);
 	synchronize_rcu();
 }
 
@@ -92,7 +103,7 @@ struct sock *rxe_ns_pernet_sk6(struct net *net)
 	struct sock *sk;
 
 	rcu_read_lock();
-	sk = ns_sk->rxe_sk6;
+	sk = rcu_dereference(ns_sk->rxe_sk6);
 	rcu_read_unlock();
 
 	return sk;
@@ -102,7 +113,7 @@ void rxe_ns_pernet_set_sk6(struct net *net, struct sock *sk)
 {
 	struct rxe_ns_sock *ns_sk = net_generic(net, rxe_pernet_id);
 
-	ns_sk->rxe_sk6 = sk;
+	rcu_assign_pointer(ns_sk->rxe_sk6, sk);
 	synchronize_rcu();
 }
 
