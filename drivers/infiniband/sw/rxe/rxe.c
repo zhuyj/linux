@@ -196,7 +196,7 @@ static int rxe_newlink(const char *ibdev_name, struct net_device *ndev)
 		goto err;
 	}
 
-	err = rxe_net_init(ndev);
+	err = rxe_net_init();
 	if (err)
 		return err;
 
