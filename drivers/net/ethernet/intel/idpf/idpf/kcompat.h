@@ -7139,39 +7139,6 @@ _kc_xsk_buff_dma_sync_for_cpu(struct xdp_buff *xdp,
 #define HAVE_NETDEV_BPF_XSK_POOL
 #endif /* <5.10.0 */
 
-
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5,11,0))
-#ifdef HAVE_XDP_BUFF_RXQ
-#include <net/xdp.h>
-static inline int
-_kc_xdp_rxq_info_reg(struct xdp_rxq_info *xdp_rxq, struct net_device *dev,
-		     u32 queue_index, unsigned int __always_unused napi_id)
-{
-	return xdp_rxq_info_reg(xdp_rxq, dev, queue_index);
-}
-
-#define xdp_rxq_info_reg(xdp_rxq, dev, queue_index, napi_id) \
-	_kc_xdp_rxq_info_reg(xdp_rxq, dev, queue_index, napi_id)
-#endif /* HAVE_XDP_BUFF_RXQ */
-#ifdef HAVE_NAPI_BUSY_LOOP
-#ifdef CONFIG_NET_RX_BUSY_POLL
-#include <net/busy_poll.h>
-static inline void
-_kc_napi_busy_loop(unsigned int napi_id,
-		   bool (*loop_end)(void *, unsigned long), void *loop_end_arg,
-		   bool __always_unused prefer_busy_poll,
-		   u16 __always_unused budget)
-{
-	napi_busy_loop(napi_id, loop_end, loop_end_arg);
-}
-
-#define napi_busy_loop(napi_id, loop_end, loop_end_arg, prefer_busy_poll, budget) \
-	_kc_napi_busy_loop(napi_id, loop_end, loop_end_arg, prefer_busy_poll, budget)
-#endif /* CONFIG_NET_RX_BUSY_POLL */
-#endif /* HAVE_NAPI_BUSY_LOOP */
-#endif /* <5.11.0 */
-
 /*
  * Load the implementations file which actually defines kcompat backports.
  * Legacy backports still exist in this file, but all new backports must be
