@@ -925,22 +925,6 @@ struct _kc_ethtool_pauseparam {
 #include "kcompat_defs.h"
 
 /*
- * ADQ depends on __TC_MQPRIO_MODE_MAX and related kernel code
- * added around 4.15. Some distributions (e.g. Oracle Linux 7.7)
- * have done a partial back-port of that to their kernels based
- * on older mainline kernels that did not include all the necessary
- * kernel enablement to support ADQ.
- * Undefine __TC_MQPRIO_MODE_MAX for all OSV distributions with
- * kernels based on mainline kernels older than 4.15 except for
- * RHEL, SLES and Ubuntu which are known to have good back-ports.
- */
-#if (!RHEL_RELEASE_CODE && !SLE_VERSION_CODE && !UBUNTU_VERSION_CODE)
-  #if (LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0))
-  #undef __TC_MQPRIO_MODE_MAX
-  #endif /*  LINUX_VERSION_CODE == KERNEL_VERSION(4,15,0) */
-#endif /* if (NOT RHEL && NOT SLES && NOT UBUNTU) */
-
-/*
  * Load the implementations file which actually defines kcompat backports.
  * Legacy backports still exist in this file, but all new backports must be
  * implemented using kcompat_*defs.h and kcompat_impl.h
