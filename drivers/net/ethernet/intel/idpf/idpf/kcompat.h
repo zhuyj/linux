@@ -45,21 +45,6 @@
 #define IEEE_8021QAZ_APP_SEL_DSCP	5
 #endif
 
-/* Backport macros for controlling GCC diagnostics */
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(4,18,0) )
-
-/* Compilers before gcc-4.6 do not understand "#pragma GCC diagnostic push" */
-#if GCC_VERSION >= 40600
-#define __diag_str1(s)		#s
-#define __diag_str(s)		__diag_str1(s)
-#define __diag(s)		_Pragma(__diag_str(GCC diagnostic s))
-#else
-#define __diag(s)
-#endif /* GCC_VERSION >= 4.6 */
-#define __diag_push()	__diag(push)
-#define __diag_pop()	__diag(pop)
-#endif /* LINUX_VERSION < 4.18.0 */
-
 #ifndef NSEC_PER_MSEC
 #define NSEC_PER_MSEC 1000000L
 #endif
