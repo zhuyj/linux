@@ -765,60 +765,6 @@ struct _kc_ethtool_pauseparam {
 	alloc_ordered_workqueue("%s", WQ_MEM_RECLAIM, name)
 #endif
 
-/* Ubuntu Release ABI is the 4th digit of their kernel version. You can find
- * it in /usr/src/linux/$(uname -r)/include/generated/utsrelease.h for new
- * enough versions of Ubuntu. Otherwise you can simply see it in the output of
- * uname as the 4th digit of the kernel. The UTS_UBUNTU_RELEASE_ABI is not in
- * the linux-source package, but in the linux-headers package. It begins to
- * appear in later releases of 14.04 and 14.10.
- *
- * Ex:
- * <Ubuntu 14.04.1>
- *  $uname -r
- *  3.13.0-45-generic
- * ABI is 45
- *
- * <Ubuntu 14.10>
- *  $uname -r
- *  3.16.0-23-generic
- * ABI is 23
- */
-#ifndef UTS_UBUNTU_RELEASE_ABI
-#define UTS_UBUNTU_RELEASE_ABI 0
-#define UBUNTU_VERSION_CODE 0
-#else
-/* Ubuntu does not provide actual release version macro, so we use the kernel
- * version plus the ABI to generate a unique version code specific to Ubuntu.
- * In addition, we mask the lower 8 bits of LINUX_VERSION_CODE in order to
- * ignore differences in sublevel which are not important since we have the
- * ABI value. Otherwise, it becomes impossible to correlate ABI to version for
- * ordering checks.
- *
- * This also lets us store an ABI value up to 65535, since it can take the
- * space that would use the lower byte of the Linux version code.
- */
-#define UBUNTU_VERSION_CODE (((~0xFF & LINUX_VERSION_CODE) << 8) + \
-			     UTS_UBUNTU_RELEASE_ABI)
-
-#if UTS_UBUNTU_RELEASE_ABI > 65535
-#error UTS_UBUNTU_RELEASE_ABI is larger than 65535...
-#endif /* UTS_UBUNTU_RELEASE_ABI > 65535 */
-
-#if ( LINUX_VERSION_CODE <= KERNEL_VERSION(3,0,0) )
-/* Our version code scheme does not make sense for non 3.x or newer kernels,
- * and we have no support in kcompat for this scenario. Thus, treat this as a
- * non-Ubuntu kernel. Possibly might be better to error here.
- */
-#define UTS_UBUNTU_RELEASE_ABI 0
-#define UBUNTU_VERSION_CODE 0
-#endif /* <= 3.0.0 */
-#endif /* !UTS_UBUNTU_RELEASE_ABI */
-
-/* We ignore the 3rd digit since we want to give precedence to the additional
- * ABI value provided by Ubuntu.
- */
-#define UBUNTU_VERSION(a,b,c,d) (((a) << 24) + ((b) << 16) + (d))
-
 /*
  * Load the implementations file which actually defines kcompat backports.
  * Legacy backports still exist in this file, but all new backports must be
