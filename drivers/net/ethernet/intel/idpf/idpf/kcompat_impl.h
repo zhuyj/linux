@@ -280,22 +280,6 @@ devlink_flash_update_status_notify(struct devlink __always_unused *devlink,
 }
 #endif /* NEED_DEVLINK_FLASH_UPDATE_STATUS_NOTIFY */
 
-#ifndef HAVE_DEVLINK_FLASH_UPDATE_PARAMS
-struct devlink_flash_update_params {
-	const char *file_name;
-	const char *component;
-	u32 overwrite_mask;
-};
-
-#ifndef DEVLINK_FLASH_OVERWRITE_SETTINGS
-#define DEVLINK_FLASH_OVERWRITE_SETTINGS BIT(0)
-#endif
-
-#ifndef DEVLINK_FLASH_OVERWRITE_IDENTIFIERS
-#define DEVLINK_FLASH_OVERWRITE_IDENTIFIERS BIT(1)
-#endif
-#endif /* !HAVE_DEVLINK_FLASH_UPDATE_PARAMS */
-
 /* NEED_DEVLINK_FLASH_UPDATE_TIMEOUT_NOTIFY
  *
  * devlink_flash_update_timeout_notify was added by upstream commit
