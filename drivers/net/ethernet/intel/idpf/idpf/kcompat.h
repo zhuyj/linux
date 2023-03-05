@@ -7087,24 +7087,6 @@ static inline u32 _xsk_umem_get_rx_frame_size(struct xdp_umem *umem)
 #define HAVE_TC_FLOW_INDIR_DEV
 #endif /* SLE_VERSION_CODE && SLE_VERSION_CODE >= SLES15SP3 */
 
-/*****************************************************************************/
-#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,4)))
-#define HAVE_TC_FLOW_INDIR_BLOCK_CLEANUP
-#endif /* (RHEL >= 8.4) */
-
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5,9,0))
-#else /* >= 5.9.0 */
-#define HAVE_FLOW_INDIR_BLOCK_QDISC
-#define HAVE_UDP_TUNNEL_NIC_INFO
-#endif /* 5.9.0 */
-#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(8,3)))
-#define HAVE_FLOW_INDIR_BLOCK_QDISC
-#endif
-#if (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(15,3,0)))
-#define HAVE_FLOW_INDIR_BLOCK_QDISC
-#endif /* SLE_VERSION_CODE && SLE_VERSION_CODE >= SLES15SP3 */
-
 /*
  * Load the implementations file which actually defines kcompat backports.
  * Legacy backports still exist in this file, but all new backports must be
