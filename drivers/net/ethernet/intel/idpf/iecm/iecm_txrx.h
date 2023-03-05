@@ -1243,6 +1243,7 @@ struct rtnl_link_stats64 *iecm_get_stats64(struct net_device *netdev,
 #ifdef HAVE_XDP_SUPPORT
 int iecm_rx_xdp(struct iecm_queue *rxq, struct iecm_queue *xdpq,
 		struct iecm_rx_buf *rx_buf, unsigned int size);
+#if IS_ENABLED(CONFIG_X86_64)
 INDIRECT_CALLABLE_DECLARE(void *iecm_prepare_xdp_tx_splitq_desc(struct iecm_queue *xdpq,
 								dma_addr_t dma, u16 idx,
 								u32 size));
@@ -1250,6 +1251,15 @@ INDIRECT_CALLABLE_DECLARE(void *iecm_prepare_xdp_tx_splitq_desc(struct iecm_queu
 INDIRECT_CALLABLE_DECLARE(void *iecm_prepare_xdp_tx_singleq_desc(struct iecm_queue *xdpq,
 								 dma_addr_t dma, u16 idx,
 								 u32 size));
+#else
+void *iecm_prepare_xdp_tx_splitq_desc(struct iecm_queue *xdpq,
+				      dma_addr_t dma, u16 idx,
+				      u32 size);
+
+void *iecm_prepare_xdp_tx_singleq_desc(struct iecm_queue *xdpq,
+				       dma_addr_t dma, u16 idx,
+				       u32 size);
+#endif
 #endif /* HAVE_XDP_SUPPORT */
 int iecm_tso(struct iecm_tx_buf *first, struct iecm_tx_offload_params *off);
 void iecm_tx_prepare_vlan_flags(struct iecm_queue *tx_q,
