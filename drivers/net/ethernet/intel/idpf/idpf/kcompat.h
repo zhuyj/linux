@@ -731,40 +731,6 @@ struct _kc_ethtool_pauseparam {
 #define SPEED_200000 200000
 #endif
 
-#ifndef RHEL_RELEASE_VERSION
-#define RHEL_RELEASE_VERSION(a,b) (((a) << 8) + (b))
-#endif
-#ifndef AX_RELEASE_VERSION
-#define AX_RELEASE_VERSION(a,b) (((a) << 8) + (b))
-#endif
-
-#ifndef AX_RELEASE_CODE
-#define AX_RELEASE_CODE 0
-#endif
-
-#if (AX_RELEASE_CODE && AX_RELEASE_CODE == AX_RELEASE_VERSION(3,0))
-#define RHEL_RELEASE_CODE RHEL_RELEASE_VERSION(5,0)
-#elif (AX_RELEASE_CODE && AX_RELEASE_CODE == AX_RELEASE_VERSION(3,1))
-#define RHEL_RELEASE_CODE RHEL_RELEASE_VERSION(5,1)
-#elif (AX_RELEASE_CODE && AX_RELEASE_CODE == AX_RELEASE_VERSION(3,2))
-#define RHEL_RELEASE_CODE RHEL_RELEASE_VERSION(5,3)
-#endif
-
-#ifndef RHEL_RELEASE_CODE
-/* NOTE: RHEL_RELEASE_* introduced in RHEL4.5 */
-#define RHEL_RELEASE_CODE 0
-#endif
-
-/* RHEL 7 didn't backport the parameter change in
- * create_singlethread_workqueue.
- * If/when RH corrects this we will want to tighten up the version check.
- */
-#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,0))
-#undef create_singlethread_workqueue
-#define create_singlethread_workqueue(name)	\
-	alloc_ordered_workqueue("%s", WQ_MEM_RECLAIM, name)
-#endif
-
 /*
  * Load the implementations file which actually defines kcompat backports.
  * Legacy backports still exist in this file, but all new backports must be
