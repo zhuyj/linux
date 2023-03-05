@@ -1038,35 +1038,6 @@ __x < __y ? __x : __y;							\
 #endif /* min_t */
 #endif /* __KLOCWORK__ */
 
-/* Older versions of GCC will trigger -Wformat-nonliteral warnings for const
- * char * strings. Unfortunately, the implementation of do_trace_printk does
- * this, in order to add a storage attribute to the memory. This was fixed in
- * GCC 5.1, but we still use older distributions built with GCC 4.x.
- *
- * The string pointer is only passed as a const char * to the __trace_bprintk
- * function. Since that function has the __printf attribute, it will trigger
- * the warnings. We can't remove the attribute, so instead we'll use the
- * __diag macro to disable -Wformat-nonliteral around the call to
- * __trace_bprintk.
- */
-#if GCC_VERSION < 50100
-#define __trace_bprintk(ip, fmt, args...) ({		\
-	int err;					\
-	__diag_push();					\
-	__diag(ignored "-Wformat-nonliteral");		\
-	err = __trace_bprintk(ip, fmt, ##args);		\
-	__diag_pop();					\
-	err;						\
-})
-#endif /* GCC_VERSION < 5.1.0 */
-
-/* Newer kernels removed <linux/pci-aspm.h> */
-#if ((LINUX_VERSION_CODE < KERNEL_VERSION(5,4,0)) && \
-     (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,3)) && \
-     !(SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(15,3,0)))))
-#define HAVE_PCI_ASPM_H
-#endif
-
 /*
  * Load the implementations file which actually defines kcompat backports.
  * Legacy backports still exist in this file, but all new backports must be
