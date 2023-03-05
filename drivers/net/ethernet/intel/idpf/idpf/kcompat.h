@@ -921,9 +921,6 @@ struct _kc_ethtool_pauseparam {
 #define SLE_LOCALVERSION_CODE 0
 #endif /* SLE_LOCALVERSION_CODE */
 
-/* Include definitions from the new kcompat layout */
-#include "kcompat_defs.h"
-
 /*
  * Load the implementations file which actually defines kcompat backports.
  * Legacy backports still exist in this file, but all new backports must be
