@@ -2334,53 +2334,6 @@ int _kc_kstrtobool(const char *s, bool *res)
 }
 #endif /* < 4.6.0 */
 
-/*****************************************************************************/
-#if ((LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)) || \
-     (SLE_VERSION_CODE && (SLE_VERSION_CODE <= SLE_VERSION(12,3,0))) || \
-     (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE <= RHEL_RELEASE_VERSION(7,5))))
-const char *_kc_phy_speed_to_str(int speed)
-{
-	switch (speed) {
-	case SPEED_10:
-		return "10Mbps";
-	case SPEED_100:
-		return "100Mbps";
-	case SPEED_1000:
-		return "1Gbps";
-	case SPEED_2500:
-		return "2.5Gbps";
-	case SPEED_5000:
-		return "5Gbps";
-	case SPEED_10000:
-		return "10Gbps";
-	case SPEED_14000:
-		return "14Gbps";
-	case SPEED_20000:
-		return "20Gbps";
-	case SPEED_25000:
-		return "25Gbps";
-	case SPEED_40000:
-		return "40Gbps";
-	case SPEED_50000:
-		return "50Gbps";
-	case SPEED_56000:
-		return "56Gbps";
-#ifdef SPEED_100000
-	case SPEED_100000:
-		return "100Gbps";
-#endif
-#ifdef SPEED_200000
-	case SPEED_200000:
-		return "200Gbps";
-#endif
-	case SPEED_UNKNOWN:
-		return "Unknown";
-	default:
-		return "Unsupported (update phy-core.c)";
-	}
-}
-#endif /* (LINUX < 4.14.0) || (SLES <= 12.3.0) || (RHEL <= 7.5) */
-
 /******************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0) )
 void _kc_ethtool_intersect_link_masks(struct ethtool_link_ksettings *dst,
