@@ -373,4 +373,20 @@ config IGC
 	  To compile this driver as a module, choose M here. The module
 	  will be called igc.
 
+config IECM
+	tristate "Intel(R) Ethernet Controller ATF support"
+	default n
+	depends on PCI
+	help
+	  This driver supports Intel(R) Ethernet Controller ATF
+	  family of adapters.
+
+config IDPF
+	tristate "Intel(R) Ethernet Controller ATF support"
+	default n
+	depends on PCI
+	help
+	  This driver supports Intel(R) Ethernet Controller ATF
+	  family of adapters.
+
 endif # NET_VENDOR_INTEL
