@@ -7051,42 +7051,6 @@ u64 _kc_pci_get_dsn(struct pci_dev *dev);
 #define HAVE_ETHTOOL_COALESCE_PARAMS_SUPPORT
 #endif /* 5.7.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5,8,0))
-#if !(RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,4))) && \
-    !(SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(15,3,0))
-#define xdp_convert_buff_to_frame convert_to_xdp_frame
-#endif /* (RHEL < 8.4) || (SLE < 15.3) */
-#define flex_array_size(p, member, count) \
-	array_size(count, sizeof(*(p)->member) + __must_be_array((p)->member))
-#if (!(SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(15,3,0)))
-#ifdef HAVE_AF_XDP_ZC_SUPPORT
-#ifndef xsk_umem_get_rx_frame_size
-static inline u32 _xsk_umem_get_rx_frame_size(struct xdp_umem *umem)
-{
-	return umem->chunk_size_nohr - XDP_PACKET_HEADROOM;
-}
-
-#define xsk_umem_get_rx_frame_size _xsk_umem_get_rx_frame_size
-#endif /* xsk_umem_get_rx_frame_size */
-#endif /* HAVE_AF_XDP_ZC_SUPPORT */
-#else /* SLE >= 15.3 */
-#define HAVE_XDP_BUFF_FRAME_SZ
-#define HAVE_MEM_TYPE_XSK_BUFF_POOL
-#endif /* SLE >= 15.3 */
-#else /* >= 5.8.0 */
-#define HAVE_TC_FLOW_INDIR_DEV
-#define HAVE_TC_FLOW_INDIR_BLOCK_CLEANUP
-#define HAVE_XDP_BUFF_FRAME_SZ
-#define HAVE_MEM_TYPE_XSK_BUFF_POOL
-#endif /* 5.8.0 */
-#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,3)))
-#define HAVE_TC_FLOW_INDIR_DEV
-#endif
-#if (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(15,3,0)))
-#define HAVE_TC_FLOW_INDIR_DEV
-#endif /* SLE_VERSION_CODE && SLE_VERSION_CODE >= SLES15SP3 */
-
 /*
  * Load the implementations file which actually defines kcompat backports.
  * Legacy backports still exist in this file, but all new backports must be
