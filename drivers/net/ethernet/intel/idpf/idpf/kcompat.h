@@ -372,14 +372,6 @@ struct _kc_vlan_hdr {
 #define IP_OFFSET 0x1FFF /* "Fragment Offset" part */
 #endif
 
-/*****************************************************************************/
-/* Installations with ethtool version without eeprom, adapter id, or statistics
- * support */
-
-#ifndef ETH_GSTRING_LEN
-#define ETH_GSTRING_LEN 32
-#endif
-
 /*
  * Load the implementations file which actually defines kcompat backports.
  * Legacy backports still exist in this file, but all new backports must be
