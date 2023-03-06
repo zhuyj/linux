@@ -47,12 +47,7 @@
 #include <linux/bpf.h>
 #endif /* HAVE_XDP_SUPPORT */
 
-#include "kcompat.h"
-#ifdef HAVE_CONFIG_DIMLIB
 #include <linux/dim.h>
-#else
-#include "kcompat_dim.h"
-#endif /* HAVE_CONFIG_DIMLIB */
 
 #include "iecm_lan_txrx.h"
 
