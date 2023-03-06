@@ -17,7 +17,7 @@ idpf-y := \
 #idpf-y += kcompat.o
 # Use kcompat DIMLIB if kernel doesn't provide it
 ifndef CONFIG_DIMLIB
-idpf-y += kcompat_dim.o kcompat_net_dim.o
+idpf-y += kcompat_net_dim.o
 endif
 else	# ifneq($(KERNELRELEASE),)
 # normal makefile
