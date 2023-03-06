@@ -4,7 +4,6 @@
 #ifndef _IECM_H_
 #define _IECM_H_
 
-#include "kcompat.h"
 #include <net/pkt_sched.h>
 #ifdef __TC_MQPRIO_MODE_MAX
 #include <net/pkt_cls.h>
