@@ -6657,69 +6657,7 @@ void _kc_pcie_print_link_status(struct pci_dev *dev);
 #define NO_NDO_XDP_FLUSH
 #endif /* 4.18.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,19,0))
-#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,0)) && \
-    (RHEL_RELEASE_CODE <= RHEL_RELEASE_VERSION(8,2)))
-#define HAVE_DEVLINK_REGIONS
-#endif /* RHEL >= 8.0 && RHEL <= 8.2 */
-#define bitmap_alloc(nbits, flags) \
-	kmalloc_array(BITS_TO_LONGS(nbits), sizeof(unsigned long), flags)
-#define bitmap_zalloc(nbits, flags) bitmap_alloc(nbits, ((flags) | __GFP_ZERO))
-#define bitmap_free(bitmap) kfree(bitmap)
-#ifdef ETHTOOL_GLINKSETTINGS
-#define ethtool_ks_clear(ptr, name) \
-	ethtool_link_ksettings_zero_link_mode(ptr, name)
-#define ethtool_ks_add_mode(ptr, name, mode) \
-	ethtool_link_ksettings_add_link_mode(ptr, name, mode)
-#define ethtool_ks_del_mode(ptr, name, mode) \
-	ethtool_link_ksettings_del_link_mode(ptr, name, mode)
-#define ethtool_ks_test(ptr, name, mode) \
-	ethtool_link_ksettings_test_link_mode(ptr, name, mode)
-#endif /* ETHTOOL_GLINKSETTINGS */
-#define HAVE_NETPOLL_CONTROLLER
-#define REQUIRE_PCI_CLEANUP_AER_ERROR_STATUS
-#if (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(15,1,0)))
-#define HAVE_TCF_MIRRED_DEV
-#define HAVE_NDO_SELECT_QUEUE_SB_DEV
-#define HAVE_TCF_BLOCK_CB_REGISTER_EXTACK
-#endif
-
-static inline void __kc_metadata_dst_free(void *md_dst)
-{
-	kfree(md_dst);
-}
-
-#define metadata_dst_free(md_dst) __kc_metadata_dst_free(md_dst)
-#else /* >= 4.19.0 */
-#define HAVE_TCF_BLOCK_CB_REGISTER_EXTACK
-#define NO_NETDEV_BPF_PROG_ATTACHED
-#define HAVE_NDO_SELECT_QUEUE_SB_DEV
-#define HAVE_NETDEV_SB_DEV
-#define HAVE_TCF_VLAN_TPID
-#define HAVE_RHASHTABLE_TYPES
-#define HAVE_DEVLINK_REGIONS
-#define HAVE_DEVLINK_PARAMS
-#endif /* 4.19.0 */
-
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0))
-#define HAVE_XDP_UMEM_PROPS
-#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,0)))
-#define HAVE_DEVLINK_ESWITCH_OPS_EXTACK
-#endif /* RHEL >= 8.0 */
-#if ((SLE_VERSION_CODE >= SLE_VERSION(12,5,0) && \
-      SLE_VERSION_CODE < SLE_VERSION(15,0,0)) || \
-     (SLE_VERSION_CODE >= SLE_VERSION(15,1,0)))
-#define HAVE_DEVLINK_ESWITCH_OPS_EXTACK
-#endif /* SLE == 12sp5 || SLE >= 15sp1 */
-#else /* >= 4.20.0 */
-#define HAVE_DEVLINK_ESWITCH_OPS_EXTACK
-#define HAVE_AF_XDP_ZC_SUPPORT
-#define HAVE_VXLAN_TYPE
-#define HAVE_ETF_SUPPORT /* Earliest TxTime First */
-#endif /* 4.20.0 */
-
+#define HAVE_VOID_NDO_GET_STATS64
 #define SPIN_UNLOCK_IMPLIES_MMIOWB
 #define HAVE_TX_TIMEOUT_TXQUEUE
 
