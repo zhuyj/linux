@@ -4093,6 +4093,7 @@ static int iecm_run_xdp(struct iecm_queue *rxq, struct iecm_queue *xdpq,
 		break;
 	default:
 		bpf_warn_invalid_xdp_action(rxq->vport->netdev, xdp_prog, act);
+		fallthrough;
 		/* fallthrough - not supported action */
 	case XDP_ABORTED:
 		/* fallthrough - handle aborts by dropping frame */

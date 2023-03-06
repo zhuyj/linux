@@ -1043,7 +1043,7 @@ static int iecm_init_mac_addr(struct iecm_vport *vport,
 		dev_info(&adapter->pdev->dev, "Invalid MAC address %pM, using random\n",
 			 vport->default_mac_addr);
 	} else {
-		ether_addr_copy(netdev->dev_addr, vport->default_mac_addr);
+		ether_addr_copy((u8 *)netdev->dev_addr, vport->default_mac_addr);
 		ether_addr_copy(netdev->perm_addr, vport->default_mac_addr);
 		return iecm_add_mac_filter(vport, vport->default_mac_addr, false);
 	}
@@ -6594,7 +6594,7 @@ static int iecm_set_mac(struct net_device *netdev, void *p)
 		iecm_del_mac_filter(vport, vport->default_mac_addr, false);
 
 	ether_addr_copy(vport->default_mac_addr, addr->sa_data);
-	ether_addr_copy(netdev->dev_addr, addr->sa_data);
+	ether_addr_copy((u8 *)netdev->dev_addr, addr->sa_data);
 
 	return err;
 }
