@@ -633,28 +633,6 @@ struct _kc_ethtool_ringparam {
 #ifndef ETHTOOL_SRINGPARAM
 #define ETHTOOL_SRINGPARAM	0x00000011 /* Set ring parameters, priv. */
 #endif
-#ifndef ETHTOOL_GPAUSEPARAM
-#define ETHTOOL_GPAUSEPARAM	0x00000012 /* Get pause parameters */
-/* for configuring link flow control parameters */
-#define ethtool_pauseparam _kc_ethtool_pauseparam
-struct _kc_ethtool_pauseparam {
-	u32	cmd;	/* ETHTOOL_{G,S}PAUSEPARAM */
-
-	/* If the link is being auto-negotiated (via ethtool_cmd.autoneg
-	 * being true) the user may set 'autoneg' here non-zero to have the
-	 * pause parameters be auto-negotiated too.  In such a case, the
-	 * {rx,tx}_pause values below determine what capabilities are
-	 * advertised.
-	 *
-	 * If 'autoneg' is zero or the link is not being auto-negotiated,
-	 * then {rx,tx}_pause force the driver to use/not-use pause
-	 * flow control.
-	 */
-	u32	autoneg;
-	u32	rx_pause;
-	u32	tx_pause;
-};
-#endif /* ETHTOOL_GPAUSEPARAM */
 
 #ifndef ETHTOOL_SPAUSEPARAM
 #define ETHTOOL_SPAUSEPARAM	0x00000013 /* Set pause parameters. */
