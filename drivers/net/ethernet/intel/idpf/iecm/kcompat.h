@@ -6538,124 +6538,12 @@ void _kc_ethtool_intersect_link_masks(struct ethtool_link_ksettings *dst,
 #define HAVE_TCF_BLOCK
 #endif /* 4.15.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,16,0))
-#if (!(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,7)) && \
-     !(SLE_VERSION_CODE >= SLE_VERSION(12,4,0) && \
-       SLE_VERSION_CODE < SLE_VERSION(15,0,0)) && \
-     !(SLE_VERSION_CODE >= SLE_VERSION(15,1,0)))
-/* The return value of the strscpy() and strlcpy() functions is different.
- * This could be potentially hazard for the future.
- * To avoid this the void result is forced.
- * So it is not possible use this function with the return value.
- * Return value is required in kernel 4.3 through 4.15
- */
-#define strscpy(...) (void)(strlcpy(__VA_ARGS__))
-#endif /* !RHEL >= 7.7 && !SLES12sp4+ && !SLES15sp1+ */
-
-#define pci_printk(level, pdev, fmt, arg...) \
-	dev_printk(level, &(pdev)->dev, fmt, ##arg)
-#define pci_emerg(pdev, fmt, arg...)	dev_emerg(&(pdev)->dev, fmt, ##arg)
-#define pci_alert(pdev, fmt, arg...)	dev_alert(&(pdev)->dev, fmt, ##arg)
-#define pci_crit(pdev, fmt, arg...)	dev_crit(&(pdev)->dev, fmt, ##arg)
-#define pci_err(pdev, fmt, arg...)	dev_err(&(pdev)->dev, fmt, ##arg)
-#define pci_warn(pdev, fmt, arg...)	dev_warn(&(pdev)->dev, fmt, ##arg)
-#define pci_notice(pdev, fmt, arg...)	dev_notice(&(pdev)->dev, fmt, ##arg)
-#define pci_info(pdev, fmt, arg...)	dev_info(&(pdev)->dev, fmt, ##arg)
-#define pci_dbg(pdev, fmt, arg...)	dev_dbg(&(pdev)->dev, fmt, ##arg)
-
-#ifndef array_index_nospec
-static inline unsigned long _kc_array_index_mask_nospec(unsigned long index,
-							unsigned long size)
-{
-	/*
-	 * Always calculate and emit the mask even if the compiler
-	 * thinks the mask is not needed. The compiler does not take
-	 * into account the value of @index under speculation.
-	 */
-	OPTIMIZER_HIDE_VAR(index);
-	return ~(long)(index | (size - 1UL - index)) >> (BITS_PER_LONG - 1);
-}
-
-#define array_index_nospec(index, size)					\
-({									\
-	typeof(index) _i = (index);					\
-	typeof(size) _s = (size);					\
-	unsigned long _mask = _kc_array_index_mask_nospec(_i, _s);	\
-									\
-	BUILD_BUG_ON(sizeof(_i) > sizeof(long));			\
-	BUILD_BUG_ON(sizeof(_s) > sizeof(long));			\
-									\
-	(typeof(_i)) (_i & _mask);					\
-})
-#endif /* array_index_nospec */
-#ifndef sizeof_field
-#define sizeof_field(TYPE, MEMBER) (sizeof((((TYPE *)0)->MEMBER)))
-#endif /* sizeof_field */
-#if !(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,0)) && \
-     !(SLE_VERSION_CODE >= SLE_VERSION(12,5,0) && \
-       SLE_VERSION_CODE < SLE_VERSION(15,0,0) || \
-       SLE_VERSION_CODE >= SLE_VERSION(15,1,0))
-/*
- * Copy bitmap and clear tail bits in last word.
- */
-static inline void
-bitmap_copy_clear_tail(unsigned long *dst, const unsigned long *src, unsigned int nbits)
-{
-	bitmap_copy(dst, src, nbits);
-	if (nbits % BITS_PER_LONG)
-		dst[nbits / BITS_PER_LONG] &= BITMAP_LAST_WORD_MASK(nbits);
-}
-
-/*
- * On 32-bit systems bitmaps are represented as u32 arrays internally, and
- * therefore conversion is not needed when copying data from/to arrays of u32.
- */
-#if BITS_PER_LONG == 64
-void bitmap_from_arr32(unsigned long *bitmap, const u32 *buf, unsigned int nbits);
-#else
-#define bitmap_from_arr32(bitmap, buf, nbits)			\
-	bitmap_copy_clear_tail((unsigned long *) (bitmap),	\
-			       (const unsigned long *) (buf), (nbits))
-#endif /* BITS_PER_LONG == 64 */
-#endif /* !(RHEL >= 8.0) && !(SLES >= 12.5 && SLES < 15.0 || SLES >= 15.1) */
-#else /* >= 4.16 */
-#include <linux/nospec.h>
-#define HAVE_TC_FLOWER_OFFLOAD_COMMON_EXTACK
-#define HAVE_TCF_MIRRED_DEV
-#define HAVE_VF_STATS_DROPPED
-#endif /* 4.16.0 */
-
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,17,0))
-#include <linux/pci_regs.h>
-#include <linux/pci.h>
-#define PCIE_SPEED_16_0GT 0x17
-#define PCI_EXP_LNKCAP_SLS_16_0GB 0x00000004 /* LNKCAP2 SLS Vector bit 3 */
-#define PCI_EXP_LNKSTA_CLS_16_0GB 0x0004 /* Current Link Speed 16.0GT/s */
-#define PCI_EXP_LNKCAP2_SLS_16_0GB 0x00000010 /* Supported Speed 16GT/s */
-void _kc_pcie_print_link_status(struct pci_dev *dev);
-#define pcie_print_link_status _kc_pcie_print_link_status
-#else /* >= 4.17.0 */
-#define HAVE_XDP_BUFF_IN_XDP_H
-#endif /* 4.17.0 */
-
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,18,0))
-#include "kcompat_overflow.h"
-
-#if (SLE_VERSION_CODE < SLE_VERSION(15,1,0))
-#define firmware_request_nowarn	request_firmware_direct
-#endif /* SLES < 15.1 */
-
-#else
-#include <linux/overflow.h>
-#include <net/xdp_sock.h>
 #define HAVE_XDP_FRAME_STRUCT
 #define HAVE_XDP_SOCK
 #define HAVE_NDO_XDP_XMIT_BULK_AND_FLAGS
 #define NO_NDO_XDP_FLUSH
-#endif /* 4.18.0 */
+
+#define HAVE_XDP_BUFF_IN_XDP_H
 
 #define HAVE_VOID_NDO_GET_STATS64
 #define SPIN_UNLOCK_IMPLIES_MMIOWB
