@@ -2,7 +2,7 @@
 /* Copyright (C) 2021 Intel Corporation */
 #ifndef _KCOMPAT_STD_DEFS_H_
 #define _KCOMPAT_STD_DEFS_H_
-
+#if 0
 /* This file contains the definitions for what kernel features need backports
  * for a given kernel. It targets only the standard stable kernel releases.
  * It must check only LINUX_VERSION_CODE and assume the kernel is a standard
@@ -204,5 +204,5 @@
 #else /* >= 5.15.0 */
 #define HAVE_ETHTOOL_COALESCE_EXTACK
 #endif /* 5.15.0 */
-
+#endif
 #endif /* _KCOMPAT_STD_DEFS_H_ */

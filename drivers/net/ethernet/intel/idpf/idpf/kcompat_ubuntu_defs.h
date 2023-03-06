@@ -2,7 +2,7 @@
 /* Copyright (C) 2021 Intel Corporation */
 #ifndef _KCOMPAT_UBUNTU_DEFS_H_
 #define _KCOMPAT_UBUNTU_DEFS_H_
-
+#if 0
 /* This file contains the definitions for the Ubuntu specific distribution of
  * the Linux kernel.
  *
@@ -29,6 +29,6 @@
      UBUNTU_VERSION_CODE < UBUNTU_VERSION(4,15,0,999))
 #undef NEED_SKB_FRAG_OFF
 #endif
-
+#endif
 /*****************************************************************************/
 #endif /* _KCOMPAT_UBUNTU_DEFS_H_ */
