@@ -31,11 +31,4 @@
 #include <linux/udp.h>
 #include <linux/vmalloc.h>
 
-/*
- * Load the implementations file which actually defines kcompat backports.
- * Legacy backports still exist in this file, but all new backports must be
- * implemented using kcompat_*defs.h and kcompat_impl.h
- */
-#include "kcompat_impl.h"
-
 #endif /* _KCOMPAT_H_ */
