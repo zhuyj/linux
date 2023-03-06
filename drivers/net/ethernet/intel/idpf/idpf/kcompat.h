@@ -4,11 +4,7 @@
 #define _KCOMPAT_H_
 
 #include "kcompat_gcc.h"
-#ifndef LINUX_VERSION_CODE
 #include <linux/version.h>
-#else
-#define KERNEL_VERSION(a,b,c) (((a) << 16) + ((b) << 8) + (c))
-#endif
 #include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/errno.h>
