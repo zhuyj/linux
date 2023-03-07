@@ -886,12 +886,8 @@ unsigned int idpf_tx_desc_count_required(struct sk_buff *skb);
 bool idpf_chk_linearize(struct sk_buff *skb, unsigned int max_bufs,
 			unsigned int count);
 int idpf_tx_maybe_stop_common(struct idpf_queue *tx_q, unsigned int size);
-#ifdef HAVE_TX_TIMEOUT_TXQUEUE
 void idpf_tx_timeout(struct net_device *netdev,
 		     unsigned int __always_unused txqueue);
-#else
-void idpf_tx_timeout(struct net_device *netdev);
-#endif /* HAVE_TX_TIMEOUT_TXQUEUE */
 netdev_tx_t idpf_tx_splitq_start(struct sk_buff *skb,
 				 struct net_device *netdev);
 netdev_tx_t idpf_tx_singleq_start(struct sk_buff *skb,

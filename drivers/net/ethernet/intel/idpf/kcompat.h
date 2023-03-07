@@ -6927,18 +6927,4 @@ static inline void _kc_bitmap_set_value8(unsigned long *map,
 
 #endif /* 5.5.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5,6,0))
-#ifdef HAVE_AF_XDP_ZC_SUPPORT
-#define xsk_umem_release_addr		xsk_umem_discard_addr
-#define xsk_umem_release_addr_rq	xsk_umem_discard_addr_rq
-#endif /* HAVE_AF_XDP_ZC_SUPPORT */
-#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,3)) || \
-     (SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(15,3,0)))
-#define HAVE_TX_TIMEOUT_TXQUEUE
-#endif
-#else /* >= 5.6.0 */
-#define HAVE_TX_TIMEOUT_TXQUEUE
-#endif /* 5.6.0 */
-
 #endif /* _KCOMPAT_H_ */

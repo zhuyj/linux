@@ -67,12 +67,8 @@ struct rtnl_link_stats64 *idpf_get_stats64(struct net_device *netdev,
  * @netdev: network interface device structure
  * @txqueue: TX queue
  */
-#ifdef HAVE_TX_TIMEOUT_TXQUEUE
 void idpf_tx_timeout(struct net_device *netdev,
 		     unsigned int txqueue)
-#else
-void idpf_tx_timeout(struct net_device *netdev)
-#endif /* HAVE_TX_TIMEOUT_TXQUEUE */
 {
 	struct idpf_vport *vport = idpf_netdev_to_vport(netdev);
 	struct idpf_adapter *adapter;
@@ -83,13 +79,9 @@ void idpf_tx_timeout(struct net_device *netdev)
 	adapter = vport->adapter;
 	adapter->tx_timeout_count++;
 
-#ifdef HAVE_TX_TIMEOUT_TXQUEUE
 	netdev_err(netdev, "Detected Tx timeout: %d Queue: %d\n",
 		   adapter->tx_timeout_count, txqueue);
-#else
-	netdev_err(netdev, "Detected Tx timeout: %d\n",
-		   adapter->tx_timeout_count);
-#endif /* HAVE_TX_TIMEOUT_TXQUEUE */
+
 	if (!idpf_is_reset_in_prog(adapter)) {
 		set_bit(__IDPF_HR_FUNC_RESET, adapter->flags);
 		queue_delayed_work(adapter->vc_event_wq,
