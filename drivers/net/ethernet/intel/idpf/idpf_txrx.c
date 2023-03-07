@@ -2824,16 +2824,8 @@ void idpf_tx_buf_hw_update(struct idpf_queue *tx_q, u32 val,
 	wmb();
 
 	/* notify HW of packet */
-	if (netif_xmit_stopped(nq) || !xmit_more) {
+	if (netif_xmit_stopped(nq) || !xmit_more)
 		writel(val, tx_q->tail);
-#ifndef SPIN_UNLOCK_IMPLIES_MMIOWB
-
-		/* we need this if more than one processor can write to our tail
-		 * at a time, it synchronizes IO on IA64/Altix systems
-		 */
-		mmiowb();
-#endif /* !SPIN_UNLOCK_IMPLIES_MMIOWB */
-	}
 }
 
 /**

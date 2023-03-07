@@ -6829,8 +6829,6 @@ __kc_eth_get_headlen(const struct net_device __always_unused *dev, void *data,
 #endif /* RHEL > 8.1 */
 
 #else /* >= 5.2.0 */
-#define HAVE_NDO_SELECT_QUEUE_FALLBACK_REMOVED
-#define SPIN_UNLOCK_IMPLIES_MMIOWB
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6,2,0))
 #define HAVE_NDO_GET_DEVLINK_PORT
 #endif /* < 6.2.0 */
