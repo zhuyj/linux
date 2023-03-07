@@ -6941,27 +6941,4 @@ static inline void _kc_bitmap_set_value8(unsigned long *map,
 #define HAVE_TX_TIMEOUT_TXQUEUE
 #endif /* 5.6.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5,7,0))
-u64 _kc_pci_get_dsn(struct pci_dev *dev);
-#define pci_get_dsn(dev) _kc_pci_get_dsn(dev)
-/* add a check for the Oracle UEK 5.4.17 kernel which
- * backported the rename of the aer functions
- */
-#if defined(NEED_ORCL_LIN_PCI_AER_CLEAR_NONFATAL_STATUS) || \
-!(SLE_VERSION_CODE > SLE_VERSION(15, 2, 0)) && \
-    !((LINUX_VERSION_CODE == KERNEL_VERSION(5,3,18)) && \
-(SLE_LOCALVERSION_CODE >= KERNEL_VERSION(14, 0, 0))) && \
-    !(LINUX_VERSION_CODE == KERNEL_VERSION(5,4,17)) && \
-    !(RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,3)))
-#define pci_aer_clear_nonfatal_status	pci_cleanup_aer_uncorrect_error_status
-#endif
-
-#ifndef DEVLINK_INFO_VERSION_GENERIC_FW_BUNDLE_ID
-#define DEVLINK_INFO_VERSION_GENERIC_FW_BUNDLE_ID "fw.bundle_id"
-#endif
-#else /* >= 5.7.0 */
-#define HAVE_ETHTOOL_COALESCE_PARAMS_SUPPORT
-#endif /* 5.7.0 */
-
 #endif /* _KCOMPAT_H_ */
