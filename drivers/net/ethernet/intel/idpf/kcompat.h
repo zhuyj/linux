@@ -6995,18 +6995,5 @@ u64 _kc_pci_get_dsn(struct pci_dev *dev);
 #endif /* (RHEL >= 8.4) */
 
 /*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5,9,0))
-#else /* >= 5.9.0 */
-#define HAVE_FLOW_INDIR_BLOCK_QDISC
-#define HAVE_UDP_TUNNEL_NIC_INFO
-#endif /* 5.9.0 */
-#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(8,3)))
-#define HAVE_FLOW_INDIR_BLOCK_QDISC
-#endif
-#if (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(15,3,0)))
-#define HAVE_FLOW_INDIR_BLOCK_QDISC
-#endif /* SLE_VERSION_CODE && SLE_VERSION_CODE >= SLES15SP3 */
-
-/*****************************************************************************/
 
 #endif /* _KCOMPAT_H_ */
