@@ -22,7 +22,7 @@ idpf-y := \
 	idpf_main.o \
 	idpf_dev.o \
 	idpf_vf_dev.o
-idpf-y += kcompat.o
+# idpf-y += kcompat.o
 # Use kcompat DIMLIB if kernel doesn't provide it
 ifndef CONFIG_DIMLIB
 idpf-y += kcompat_dim.o kcompat_net_dim.o
