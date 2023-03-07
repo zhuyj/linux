@@ -47,11 +47,7 @@ struct idpf_vport_max_q;
 #define IDPF_DRV_NAME "idpf"
 #define IDPF_DRV_VER "0.0.704"
 #include "kcompat.h"
-#ifdef HAVE_CONFIG_DIMLIB
 #include <linux/dim.h>
-#else
-#include "kcompat_dim.h"
-#endif /* HAVE_CONFIG_DIMLIB */
 
 #include "idpf_lan_txrx.h"
 

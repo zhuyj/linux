@@ -6887,9 +6887,6 @@ int _kc_flow_block_cb_setup_simple(struct flow_block_offload *f,
 #endif /* < 5.8.0*/
 #define HAVE_FLOW_BLOCK_API
 #define HAVE_DEVLINK_PORT_ATTR_PCI_VF
-#if IS_ENABLED(CONFIG_DIMLIB)
-#define HAVE_CONFIG_DIMLIB
-#endif
 #endif /* 5.3.0 */
 
 #endif /* _KCOMPAT_H_ */
