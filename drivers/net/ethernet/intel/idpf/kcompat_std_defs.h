@@ -118,7 +118,6 @@
 #define NEED_TC_CLS_CAN_OFFLOAD_AND_CHAIN0
 #else /* >= 4,16,0 */
 #define HAVE_XDP_BUFF_RXQ
-#define HAVE_XDP_RXQ_INFO_REG_3_PARAMS
 #endif /* 4,16,0 */
 
 /*****************************************************************************/
@@ -266,7 +265,6 @@
 #define HAVE_DEVLINK_FLASH_UPDATE_PARAMS_FW
 #define HAVE_XSK_BATCHED_DESCRIPTOR_INTERFACES
 #define HAVE_PASID_SUPPORT
-#undef HAVE_XDP_RXQ_INFO_REG_3_PARAMS
 #define HAVE_XSK_TX_PEEK_RELEASE_DESC_BATCH_3_PARAMS
 #endif /* 5.11.0 */
 

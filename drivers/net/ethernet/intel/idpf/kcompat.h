@@ -6634,7 +6634,6 @@ void bitmap_from_arr32(unsigned long *bitmap, const u32 *buf, unsigned int nbits
 void _kc_pcie_print_link_status(struct pci_dev *dev);
 #define pcie_print_link_status _kc_pcie_print_link_status
 #else /* >= 4.17.0 */
-#define HAVE_XDP_BUFF_IN_XDP_H
 #endif /* 4.17.0 */
 
 /*****************************************************************************/
@@ -7007,24 +7006,6 @@ u64 _kc_pci_get_dsn(struct pci_dev *dev);
 #if (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(15,3,0)))
 #define HAVE_FLOW_INDIR_BLOCK_QDISC
 #endif /* SLE_VERSION_CODE && SLE_VERSION_CODE >= SLES15SP3 */
-
-/*****************************************************************************/
-#ifdef HAVE_XDP_RXQ_INFO_REG_3_PARAMS
-#ifdef HAVE_XDP_BUFF_IN_XDP_H
-#include <net/xdp.h>
-#else
-#include <linux/filter.h>
-#endif /* HAVE_XDP_BUFF_IN_XDP_H */
-static inline int
-_kc_xdp_rxq_info_reg(struct xdp_rxq_info *xdp_rxq, struct net_device *dev,
-		     u32 queue_index, unsigned int __always_unused napi_id)
-{
-	return xdp_rxq_info_reg(xdp_rxq, dev, queue_index);
-}
-
-#define xdp_rxq_info_reg(xdp_rxq, dev, queue_index, napi_id) \
-	_kc_xdp_rxq_info_reg(xdp_rxq, dev, queue_index, napi_id)
-#endif /* HAVE_XDP_RXQ_INFO_REG_3_PARAMS */
 
 /*****************************************************************************/
 
