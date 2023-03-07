@@ -310,10 +310,8 @@ idpf_prepare_for_xmit_zc(struct idpf_queue *xdpq)
 {
 	u16 send_budget;
 
-#ifdef HAVE_NDO_XSK_WAKEUP
 	if (xsk_uses_need_wakeup(xdpq->xsk_pool))
 		xsk_set_tx_need_wakeup(xdpq->xsk_pool);
-#endif /* HAVE_NDO_XSK_WAKEUP */
 
 	if (test_bit(__IDPF_Q_FLOW_SCH_EN, xdpq->flags)) {
 		/* For flow-based scheduling we are getting RS bit for each packet.
@@ -463,7 +461,6 @@ idpf_xsk_schedule_napi_for_xmit(struct idpf_vport *vport, struct idpf_q_vector *
 		idpf_trigger_sw_intr(&vport->adapter->hw, q_vector);
 }
 
-#ifdef HAVE_NDO_XSK_WAKEUP
 /**
  * idpf_xsk_splitq_wakeup - Implements ndo_xsk_wakeup for split queue mode
  * @netdev: net_device
@@ -476,17 +473,6 @@ int
 idpf_xsk_splitq_wakeup(struct net_device *netdev, u32 q_id,
 		       u32 __always_unused flags)
 {
-#else
-/**
- * idpf_xsk_splitq_async_xmit - Implements ndo_xsk_async_xmit for split queue mode
- * @netdev: net_device
- * @q_id: queue to wake up
- *
- * Returns negative value on error, zero otherwise.
- */
-int idpf_xsk_splitq_async_xmit(struct net_device *netdev, u32 q_id)
-{
-#endif /* HAVE_NDO_XSK_WAKEUP */
 	struct idpf_netdev_priv *np = netdev_priv(netdev);
 	struct idpf_vport *vport = np->vport;
 	struct idpf_q_vector *q_vector;
@@ -516,7 +502,6 @@ exit:
 	return ret;
 }
 
-#ifdef HAVE_NDO_XSK_WAKEUP
 /**
  * idpf_xsk_singleq_wakeup - Implements ndo_xsk_wakeup for single queue mode
  * @netdev: net_device
@@ -529,17 +514,6 @@ int
 idpf_xsk_singleq_wakeup(struct net_device *netdev, u32 q_id,
 			u32 __always_unused flags)
 {
-#else
-/**
- * idpf_xsk_singleq_async_xmit - Implements ndo_xsk_async_xmit for single queue mode
- * @netdev: net_device
- * @q_id: queue to wake up
- *
- * Returns negative value on error, zero otherwise.
- */
-int idpf_xsk_singleq_async_xmit(struct net_device *netdev, u32 q_id)
-{
-#endif /* HAVE_NDO_XSK_WAKEUP */
 	struct idpf_netdev_priv *np = netdev_priv(netdev);
 	struct idpf_vport *vport = np->vport;
 	struct idpf_q_vector *q_vector;

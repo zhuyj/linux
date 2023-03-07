@@ -3054,11 +3054,7 @@ static const struct net_device_ops idpf_netdev_ops_splitq = {
 	.ndo_xdp_flush = idpf_xdp_flush,
 #endif /* !NO_NDO_XDP_FLUSH */
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
-#ifdef HAVE_NDO_XSK_WAKEUP
 	.ndo_xsk_wakeup = idpf_xsk_splitq_wakeup,
-#else
-	.ndo_xsk_async_xmit = idpf_xsk_splitq_async_xmit,
-#endif /* HAVE_NDO_XSK_WAKEUP */
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
 #endif /* HAVE_XDP_SUPPORT */
 };
@@ -3098,11 +3094,7 @@ static const struct net_device_ops idpf_netdev_ops_singleq = {
 	.ndo_xdp_flush = idpf_xdp_flush,
 #endif /* !NO_NDO_XDP_FLUSH */
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
-#ifdef HAVE_NDO_XSK_WAKEUP
 	.ndo_xsk_wakeup = idpf_xsk_singleq_wakeup,
-#else
-	.ndo_xsk_async_xmit = idpf_xsk_singleq_async_xmit,
-#endif /* HAVE_NDO_XSK_WAKEUP */
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
 #endif /* HAVE_XDP_SUPPORT */
 };

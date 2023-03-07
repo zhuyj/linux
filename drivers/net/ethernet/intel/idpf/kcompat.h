@@ -6892,13 +6892,4 @@ int _kc_flow_block_cb_setup_simple(struct flow_block_offload *f,
 #endif
 #endif /* 5.3.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5,4,0))
-#if (SLE_VERSION_CODE >= SLE_VERSION(15,2,0))
-#define HAVE_NDO_XSK_WAKEUP
-#endif /* SLES15sp2 */
-#else /* >= 5.4.0 */
-#define HAVE_NDO_XSK_WAKEUP
-#endif /* 5.4.0 */
-
 #endif /* _KCOMPAT_H_ */

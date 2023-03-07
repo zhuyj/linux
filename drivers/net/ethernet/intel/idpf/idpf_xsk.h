@@ -16,11 +16,6 @@ struct idpf_tx_queue_stats idpf_tx_splitq_clean_zc(struct idpf_queue *xdpq, u16 
 bool idpf_tx_singleq_clean_zc(struct idpf_queue *xdpq, int *cleaned);
 bool idpf_tx_splitq_xmit_zc(struct idpf_queue *xdpq);
 void idpf_xsk_cleanup_xdpq(struct idpf_queue *xdpq);
-#ifdef HAVE_NDO_XSK_WAKEUP
 int idpf_xsk_splitq_wakeup(struct net_device *netdev, u32 q_id, u32 __always_unused flags);
 int idpf_xsk_singleq_wakeup(struct net_device *netdev, u32 q_id, u32 __always_unused flags);
-#else
-int idpf_xsk_splitq_async_xmit(struct net_device *netdev, u32 q_id);
-int idpf_xsk_singleq_async_xmit(struct net_device *netdev, u32 q_id);
-#endif /* HAVE_NDO_XSK_WAKEUP */
 #endif /* !_IDPF_XSK_H_ */
