@@ -6794,44 +6794,4 @@ ptp_read_system_postts(struct ptp_system_timestamp __always_unused *sts)
 #define HAVE_DEVLINK_FLASH_UPDATE
 #endif /* 5.1.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5,2,0))
-#if (defined HAVE_SKB_XMIT_MORE) && \
-(!(RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,2))))
-#define netdev_xmit_more()	(skb->xmit_more)
-#else
-#define netdev_xmit_more()	(0)
-#endif
-
-#if (!(RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,2))))
-#ifndef eth_get_headlen
-static inline u32
-__kc_eth_get_headlen(const struct net_device __always_unused *dev, void *data,
-		     unsigned int len)
-{
-	return eth_get_headlen(data, len);
-}
-
-#define eth_get_headlen(dev, data, len) __kc_eth_get_headlen(dev, data, len)
-#endif /* !eth_get_headlen */
-#endif /* !RHEL >= 8.2 */
-
-#ifndef mmiowb
-#ifdef CONFIG_IA64
-#define mmiowb() asm volatile ("mf.a" ::: "memory")
-#else
-#define mmiowb()
-#endif
-#endif /* mmiowb */
-
-#if (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(8,1))
-#define HAVE_NDO_GET_DEVLINK_PORT
-#endif /* RHEL > 8.1 */
-
-#else /* >= 5.2.0 */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,2,0))
-#define HAVE_NDO_GET_DEVLINK_PORT
-#endif /* < 6.2.0 */
-#endif /* 5.2.0 */
-
 #endif /* _KCOMPAT_H_ */
