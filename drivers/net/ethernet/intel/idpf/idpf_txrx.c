@@ -4583,9 +4583,7 @@ int idpf_rx_xdp(struct idpf_queue *rxq, struct idpf_queue *xdpq,
 #ifdef HAVE_XDP_BUFF_RXQ
 	xdp.rxq = &rxq->xdp_rxq;
 #endif /* HAVE_XDP_BUFF_RXQ */
-#ifdef HAVE_XDP_BUFF_FRAME_SZ
 	xdp.frame_sz = idpf_rx_frame_truesize(rx_buf, size);
-#endif /* HAVE_XDP_BUFF_FRAME_SZ */
 
 	xdp_res = idpf_run_xdp(rxq, xdpq, xdp_prog, &xdp);
 	rcu_read_unlock();

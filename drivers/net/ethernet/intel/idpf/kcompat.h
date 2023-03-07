@@ -6964,30 +6964,4 @@ u64 _kc_pci_get_dsn(struct pci_dev *dev);
 #define HAVE_ETHTOOL_COALESCE_PARAMS_SUPPORT
 #endif /* 5.7.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5,8,0))
-#if !(RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,4))) && \
-    !(SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(15,3,0))
-/* (RHEL < 8.4) || (SLE < 15.3) */
-#define xdp_convert_buff_to_frame convert_to_xdp_frame
-#elif (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,4)))
-/* RHEL >= 8.4 */
-#define HAVE_XDP_BUFF_FRAME_SZ
-#endif
-#define flex_array_size(p, member, count) \
-	array_size(count, sizeof(*(p)->member) + __must_be_array((p)->member))
-#else /* >= 5.8.0 */
-#define HAVE_TC_FLOW_INDIR_DEV
-#define HAVE_XDP_BUFF_FRAME_SZ
-#define HAVE_MEM_TYPE_XSK_BUFF_POOL
-#endif /* 5.8.0 */
-#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,3)))
-#define HAVE_TC_FLOW_INDIR_DEV
-#endif
-#if (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(15,3,0)))
-#define HAVE_TC_FLOW_INDIR_DEV
-#endif /* SLE_VERSION_CODE && SLE_VERSION_CODE >= SLES15SP3 */
-
-/*****************************************************************************/
-
 #endif /* _KCOMPAT_H_ */
