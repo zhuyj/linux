@@ -377,6 +377,7 @@ config IDPF
 	tristate "Intel(R) Ethernet Controller APF support"
 	default n
 	depends on PCI
+	select DIMLIB
 
 	help
 	  This driver supports Intel(R) Ethernet Controller APF
