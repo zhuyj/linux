@@ -378,6 +378,7 @@ config IDPF
 	default n
 	depends on PCI
 	select DIMLIB
+	select VFIO_MDEV
 
 	help
 	  This driver supports Intel(R) Ethernet Controller APF

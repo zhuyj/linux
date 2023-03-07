@@ -23,9 +23,9 @@ idpf-y := \
 	idpf_dev.o \
 	idpf_vf_dev.o
 
-ifneq (${ENABLE_SIOV_SUPPORT},)
-idpf-$(CONFIG_VFIO_MDEV:m=y) += idpf_vdcm.o idpf_siov.o
-endif
+#ifneq (${ENABLE_SIOV_SUPPORT},)
+#idpf-$(CONFIG_VFIO_MDEV:m=y) += idpf_vdcm.o idpf_siov.o
+#endif
 ifneq (${ENABLE_DEVLINK_SUPPORT},)
 idpf-$(CONFIG_NET_DEVLINK:m=y) += idpf_devlink.o
 override ccflags-$(CONFIG_NET_DEVLINK:m=y) += -DDEVLINK_ENABLED
