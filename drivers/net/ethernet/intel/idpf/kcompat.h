@@ -6978,7 +6978,6 @@ u64 _kc_pci_get_dsn(struct pci_dev *dev);
 	array_size(count, sizeof(*(p)->member) + __must_be_array((p)->member))
 #else /* >= 5.8.0 */
 #define HAVE_TC_FLOW_INDIR_DEV
-#define HAVE_TC_FLOW_INDIR_BLOCK_CLEANUP
 #define HAVE_XDP_BUFF_FRAME_SZ
 #define HAVE_MEM_TYPE_XSK_BUFF_POOL
 #endif /* 5.8.0 */
@@ -6988,11 +6987,6 @@ u64 _kc_pci_get_dsn(struct pci_dev *dev);
 #if (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(15,3,0)))
 #define HAVE_TC_FLOW_INDIR_DEV
 #endif /* SLE_VERSION_CODE && SLE_VERSION_CODE >= SLES15SP3 */
-
-/*****************************************************************************/
-#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,4)))
-#define HAVE_TC_FLOW_INDIR_BLOCK_CLEANUP
-#endif /* (RHEL >= 8.4) */
 
 /*****************************************************************************/
 
