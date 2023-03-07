@@ -6901,30 +6901,4 @@ int _kc_flow_block_cb_setup_simple(struct flow_block_offload *f,
 #define HAVE_NDO_XSK_WAKEUP
 #endif /* 5.4.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5,5,0))
-static inline unsigned long _kc_bitmap_get_value8(const unsigned long *map,
-						  unsigned long start)
-{
-	const size_t index = BIT_WORD(start);
-	const unsigned long offset = start % BITS_PER_LONG;
-
-	return (map[index] >> offset) & 0xFF;
-}
-#define bitmap_get_value8 _kc_bitmap_get_value8
-
-static inline void _kc_bitmap_set_value8(unsigned long *map,
-					 unsigned long value,
-					 unsigned long start)
-{
-	const size_t index = BIT_WORD(start);
-	const unsigned long offset = start % BITS_PER_LONG;
-
-	map[index] &= ~(0xFFUL << offset);
-	map[index] |= value << offset;
-}
-#define bitmap_set_value8 _kc_bitmap_set_value8
-
-#endif /* 5.5.0 */
-
 #endif /* _KCOMPAT_H_ */
