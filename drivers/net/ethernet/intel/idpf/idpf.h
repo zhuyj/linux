@@ -21,9 +21,9 @@ struct idpf_vport_max_q;
 #include <linux/sctp.h>
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
-#ifdef HAVE_GRO_HEADER
+
 #include <net/gro.h>
-#endif /* HAVE_GRO_HEADER */
+
 #include <net/tcp.h>
 #include <net/ip6_checksum.h>
 #include <net/ipv6.h>
