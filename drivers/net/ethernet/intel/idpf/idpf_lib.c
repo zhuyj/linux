@@ -2762,7 +2762,6 @@ out_err:
 }
 
 #endif /* HAVE_NDO_FEATURES_CHECK */
-#ifdef HAVE_ETF_SUPPORT
 /**
  * idpf_change_tx_sch_mode - reset queue context with appropriate
  * tx scheduling mode
@@ -2822,7 +2821,6 @@ static int idpf_offload_txtime(struct idpf_vport *vport,
 
 	return 0;
 }
-#endif /* HAVE_ETF_SUPPORT */
 
 /**
  * idpf_setup_tc - ndo callback to setup up TC schedulers
@@ -2839,13 +2837,11 @@ static int idpf_setup_tc(struct net_device *netdev, enum tc_setup_type type,
 		return -EINVAL;
 
 	switch (type) {
-#ifdef HAVE_ETF_SUPPORT
 	case TC_SETUP_QDISC_ETF:
 		if (!idpf_is_queue_model_split(vport->txq_model))
 			return -EOPNOTSUPP;
 		return idpf_offload_txtime(vport,
 				       (struct tc_etf_qopt_offload *)type_data);
-#endif /* HAVE_ETF_SUPPORT */
 	default:
 		return -EOPNOTSUPP;
 	}

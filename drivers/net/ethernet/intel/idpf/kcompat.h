@@ -6692,21 +6692,4 @@ static inline void __kc_metadata_dst_free(void *md_dst)
 #define HAVE_RHASHTABLE_TYPES
 #endif /* 4.19.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0))
-#define HAVE_XDP_UMEM_PROPS
-#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,0)))
-#define HAVE_DEVLINK_ESWITCH_OPS_EXTACK
-#endif /* RHEL >= 8.0 */
-#if ((SLE_VERSION_CODE >= SLE_VERSION(12,5,0) && \
-      SLE_VERSION_CODE < SLE_VERSION(15,0,0)) || \
-     (SLE_VERSION_CODE >= SLE_VERSION(15,1,0)))
-#define HAVE_DEVLINK_ESWITCH_OPS_EXTACK
-#endif /* SLE == 12sp5 || SLE >= 15sp1 */
-#else /* >= 4.20.0 */
-#define HAVE_DEVLINK_ESWITCH_OPS_EXTACK
-#define HAVE_AF_XDP_ZC_SUPPORT
-#define HAVE_ETF_SUPPORT /* Earliest TxTime First */
-#endif /* 4.20.0 */
-
 #endif /* _KCOMPAT_H_ */

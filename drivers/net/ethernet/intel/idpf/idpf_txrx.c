@@ -1752,13 +1752,9 @@ err_out:
  */
 int idpf_vport_queues_alloc(struct idpf_vport *vport)
 {
-#ifdef HAVE_ETF_SUPPORT
 	struct idpf_vport_user_config_data *config_data;
-#endif /* HAVE_ETF_SUPPORT */
 	int err;
-#ifdef HAVE_ETF_SUPPORT
 	int i;
-#endif
 
 	err = idpf_vport_queue_grp_alloc_all(vport);
 	if (err)
@@ -1776,7 +1772,6 @@ int idpf_vport_queues_alloc(struct idpf_vport *vport)
 	if (err)
 		goto err_out;
 
-#ifdef HAVE_ETF_SUPPORT
 	config_data = &vport->adapter->vport_config[vport->idx]->user_config;
 	/* Initialize flow scheduling for queues that were requested
 	 * before the interface was brought up
@@ -1788,7 +1783,6 @@ int idpf_vport_queues_alloc(struct idpf_vport *vport)
 		}
 	}
 
-#endif /* HAVE_ETF_SUPPORT */
 #ifdef HAVE_XDP_SUPPORT
 	if (idpf_xdp_is_prog_ena(vport)) {
 		int j;
@@ -3176,12 +3170,7 @@ idpf_get_flow_sche_tstamp(struct sk_buff *skb, struct idpf_queue *txq,
 			  struct idpf_tx_offload_params *offload)
 {
 	struct idpf_adapter *adapter = txq->vport->adapter;
-#ifdef HAVE_ETF_SUPPORT
-	/* skb timestamp field changed around same time ETF support was added */
 	u64 ts_ns = skb->skb_mstamp_ns;
-#else
-	u64 ts_ns = ktime_to_ns(skb->tstamp);
-#endif /* HAVE_ETF_SUPPORT */
 	u64 cur_time = 0;
 
 	/* TODO: revisit how to sync device time with OS time */
