@@ -6620,34 +6620,4 @@ void bitmap_from_arr32(unsigned long *bitmap, const u32 *buf, unsigned int nbits
 #define HAVE_VF_STATS_DROPPED
 #endif /* 4.16.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,17,0))
-#include <linux/pci_regs.h>
-#include <linux/pci.h>
-#define PCIE_SPEED_16_0GT 0x17
-#define PCI_EXP_LNKCAP_SLS_16_0GB 0x00000004 /* LNKCAP2 SLS Vector bit 3 */
-#define PCI_EXP_LNKSTA_CLS_16_0GB 0x0004 /* Current Link Speed 16.0GT/s */
-#define PCI_EXP_LNKCAP2_SLS_16_0GB 0x00000010 /* Supported Speed 16GT/s */
-void _kc_pcie_print_link_status(struct pci_dev *dev);
-#define pcie_print_link_status _kc_pcie_print_link_status
-#else /* >= 4.17.0 */
-#endif /* 4.17.0 */
-
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,18,0))
-#include "kcompat_overflow.h"
-
-#if (SLE_VERSION_CODE < SLE_VERSION(15,1,0))
-#define firmware_request_nowarn	request_firmware_direct
-#endif /* SLES < 15.1 */
-
-#else
-#include <linux/overflow.h>
-#include <net/xdp_sock.h>
-#define HAVE_XDP_FRAME_STRUCT
-#define HAVE_XDP_SOCK
-#define HAVE_NDO_XDP_XMIT_BULK_AND_FLAGS
-#define NO_NDO_XDP_FLUSH
-#endif /* 4.18.0 */
-
 #endif /* _KCOMPAT_H_ */

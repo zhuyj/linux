@@ -105,11 +105,7 @@ void idpf_tx_buf_rel(struct idpf_queue *tx_q, struct idpf_tx_buf *tx_buf)
 					 DMA_TO_DEVICE);
 #ifdef HAVE_XDP_SUPPORT
 		if (test_bit(__IDPF_Q_XDP, tx_q->flags))
-#ifdef HAVE_XDP_FRAME_STRUCT
 			xdp_return_frame(tx_buf->xdpf);
-#else
-			page_frag_free(tx_buf->raw_buf);
-#endif /* HAVE_XDP_FRAME_STRUCT */
 		else
 			dev_kfree_skb_any(tx_buf->skb);
 #else
@@ -1863,11 +1859,7 @@ idpf_tx_splitq_clean_hdr(struct idpf_queue *tx_q, struct idpf_tx_buf *tx_buf,
 
 #ifdef HAVE_XDP_SUPPORT
 	if (test_bit(__IDPF_Q_XDP, tx_q->flags))
-#ifdef HAVE_XDP_FRAME_STRUCT
 		xdp_return_frame(tx_buf->xdpf);
-#else
-		page_frag_free(tx_buf->raw_buf);
-#endif
 	else
 		/* free the skb */
 		napi_consume_skb(tx_buf->skb, napi_budget);
@@ -4326,11 +4318,7 @@ void *idpf_prepare_xdp_tx_splitq_desc(struct idpf_queue *xdpq, dma_addr_t dma,
  * @xdp: frame data to transmit
  * @xdpq: XDP queue for transmission
  */
-#ifdef HAVE_XDP_FRAME_STRUCT
 int idpf_xmit_xdpq(struct xdp_frame *xdp, struct idpf_queue *xdpq)
-#else
-int idpf_xmit_xdpq(struct xdp_buff *xdp, struct idpf_queue *xdpq)
-#endif
 {
 	u16 ntu = xdpq->next_to_use;
 	struct idpf_tx_buf *tx_buf;
@@ -4344,11 +4332,7 @@ int idpf_xmit_xdpq(struct xdp_buff *xdp, struct idpf_queue *xdpq)
 	if (unlikely(!IDPF_DESC_UNUSED(xdpq)))
 		return IDPF_XDP_CONSUMED;
 
-#ifdef HAVE_XDP_FRAME_STRUCT
 	size = xdp->len;
-#else
-	size = xdp->data_end - xdp->data;
-#endif
 	data = xdp->data;
 
 	dma = dma_map_single(xdpq->dev, data, size, DMA_TO_DEVICE);
@@ -4358,11 +4342,7 @@ int idpf_xmit_xdpq(struct xdp_buff *xdp, struct idpf_queue *xdpq)
 	tx_buf = &xdpq->tx_buf[ntu];
 	tx_buf->bytecount = size;
 	tx_buf->gso_segs = 1;
-#ifdef HAVE_XDP_FRAME_STRUCT
 	tx_buf->xdpf = xdp;
-#else
-	tx_buf->raw_buf = data;
-#endif
 
 	/* record length, and DMA address */
 	dma_unmap_len_set(tx_buf, len, size);
@@ -4397,7 +4377,6 @@ int idpf_xmit_xdpq(struct xdp_buff *xdp, struct idpf_queue *xdpq)
 	return IDPF_XDP_TX;
 }
 
-#ifdef HAVE_XDP_FRAME_STRUCT
 /**
  * idpf_xdp_xmit - submit packets to xdp ring for transmission
  * @dev: netdev
@@ -4412,19 +4391,12 @@ int idpf_xmit_xdpq(struct xdp_buff *xdp, struct idpf_queue *xdpq)
  */
 int idpf_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
 		  u32 flags)
-#else
-int idpf_xdp_xmit(struct net_device *dev, struct xdp_buff *xdp)
-#endif /* HAVE_XDP_FRAME_STRUCT */
 {
 	struct idpf_netdev_priv *np = netdev_priv(dev);
 	unsigned int queue_index = smp_processor_id();
 	struct idpf_vport *vport = np->vport;
 	struct idpf_queue *xdpq;
-#ifdef HAVE_XDP_FRAME_STRUCT
 	int i, drops = 0;
-#else
-	int err;
-#endif /* HAVE_XDP_FRAME_STRUCT */
 
 	if (vport->state == __IDPF_VPORT_DOWN)
 		return -ENETDOWN;
@@ -4432,12 +4404,9 @@ int idpf_xdp_xmit(struct net_device *dev, struct xdp_buff *xdp)
 	if (!idpf_xdp_is_prog_ena(vport) || queue_index >= vport->num_xdp_txq)
 		return -ENXIO;
 
-#ifdef HAVE_XDP_FRAME_STRUCT
 	if (unlikely(flags & ~XDP_XMIT_FLAGS_MASK))
 		return -EINVAL;
-#endif
 	xdpq = vport->txqs[queue_index + vport->xdp_txq_offset];
-#ifdef HAVE_XDP_FRAME_STRUCT
 	for (i = 0; i < n; ++i) {
 		struct xdp_frame *xdpf = frames[i];
 		int err;
@@ -4453,33 +4422,8 @@ int idpf_xdp_xmit(struct net_device *dev, struct xdp_buff *xdp)
 		idpf_xdpq_update_tail(xdpq);
 
 	return n - drops;
-#else
-	err = idpf_xmit_xdpq(xdp, xdpq);
-	return err == IDPF_XDP_TX ? 0 : -EFAULT;
-#endif /* HAVE_XDP_FRAME_STRUCT */
 }
 
-#ifndef NO_NDO_XDP_FLUSH
-/**
- * idpf_xdp_flush - flush xdp ring and transmit all submitted packets
- * @dev: netdev
- */
-void idpf_xdp_flush(struct net_device *dev)
-{
-	struct idpf_netdev_priv *np = netdev_priv(dev);
-	unsigned int queue_index = smp_processor_id();
-	struct idpf_vport *vport = np->vport;
-
-	if (vport->state == __IDPF_VPORT_DOWN)
-		return;
-
-	if (!idpf_xdp_is_prog_ena(vport) || queue_index >= vport->num_xdp_txq)
-		return;
-
-	idpf_xdpq_update_tail(vport->txqs[queue_index + vport->xdp_txq_offset]);
-}
-
-#endif /* NO_NDO_XDP_FLUSH */
 /**
  * idpf_run_xdp - Executes an XDP program on initialized xdp_buff
  * @rxq: Rx queue
@@ -4500,11 +4444,7 @@ static int idpf_run_xdp(struct idpf_queue *rxq, struct idpf_queue *xdpq,
 	case XDP_PASS:
 		break;
 	case XDP_TX:
-#ifdef HAVE_XDP_FRAME_STRUCT
 		return idpf_xmit_xdpq(xdp_convert_buff_to_frame(xdp), xdpq);
-#else
-		return idpf_xmit_xdpq(xdp, xdpq);
-#endif
 	case XDP_REDIRECT:
 		err = xdp_do_redirect(rxq->vport->netdev, xdp, xdp_prog);
 		result = !err ? IDPF_XDP_REDIR : IDPF_XDP_CONSUMED;

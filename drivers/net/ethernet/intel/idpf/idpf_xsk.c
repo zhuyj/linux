@@ -221,11 +221,7 @@ idpf_xmit_singleq_zc(struct idpf_queue *xdpq, int budget)
 static void
 idpf_clean_xdp_tx_buf(struct idpf_queue *xdpq, struct idpf_tx_buf *tx_buf)
 {
-#ifdef HAVE_XDP_FRAME_STRUCT
 	xdp_return_frame(tx_buf->xdpf);
-#else
-	xdp_return_frame((struct xdp_frame *)tx_buf->raw_buf);
-#endif
 	xdpq->xdp_tx_active--;
 	dma_unmap_single(xdpq->dev, dma_unmap_addr(tx_buf, dma),
 			 dma_unmap_len(tx_buf, len), DMA_TO_DEVICE);
@@ -260,17 +256,9 @@ idpf_tx_clean_zc(struct idpf_queue *xdpq, u16 ntc, u16 clean_count)
 	for (i = 0; i < clean_count; i++) {
 		tx_buf = &xdpq->tx_buf[ntc];
 
-#ifdef HAVE_XDP_FRAME_STRUCT
 		if (tx_buf->xdpf) {
-#else
-		if (tx_buf->raw_buf) {
-#endif
 			idpf_clean_xdp_tx_buf(xdpq, tx_buf);
-#ifdef HAVE_XDP_FRAME_STRUCT
 			tx_buf->xdpf = NULL;
-#else
-			tx_buf->raw_buf = NULL;
-#endif
 			cleaned_stats.bytes += tx_buf->bytecount;
 		} else {
 			xsk_frames++;
@@ -555,20 +543,12 @@ void idpf_xsk_cleanup_xdpq(struct idpf_queue *xdpq)
 	while (ntc != ntu) {
 		struct idpf_tx_buf *tx_buf = &xdpq->tx_buf[ntc];
 
-#ifdef HAVE_XDP_FRAME_STRUCT
 		if (tx_buf->xdpf)
-#else
-		if (tx_buf->raw_buf)
-#endif
 			idpf_clean_xdp_tx_buf(xdpq, tx_buf);
 		else
 			xsk_frames++;
 
-#ifdef HAVE_XDP_FRAME_STRUCT
 		tx_buf->xdpf = NULL;
-#else
-		tx_buf->raw_buf = NULL;
-#endif
 
 		ntc++;
 		if (ntc >= xdpq->desc_count)

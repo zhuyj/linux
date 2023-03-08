@@ -1056,15 +1056,8 @@ void idpf_vport_intr_write_itr(struct idpf_q_vector *q_vector,
 			       u16 itr, bool tx);
 int idpf_send_map_unmap_queue_vector_msg(struct idpf_vport *vport, bool map);
 #ifdef HAVE_XDP_SUPPORT
-#ifdef HAVE_XDP_FRAME_STRUCT
 int idpf_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
 		  u32 flags);
-#else
-int idpf_xdp_xmit(struct net_device *dev, struct xdp_buff *xdp);
-#endif /* HAVE_XDP_FRAME_STRUCT */
-#ifndef NO_NDO_XDP_FLUSH
-void idpf_xdp_flush(struct net_device *dev);
-#endif /* NO_NDO_XDP_FLUSH */
 #endif /* HAVE_XDP_SUPPORT */
 int idpf_get_max_vfs(struct idpf_adapter *adapter);
 int idpf_send_set_sriov_vfs_msg(struct idpf_adapter *adapter, u16 num_vfs);

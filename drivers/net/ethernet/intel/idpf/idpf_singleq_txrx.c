@@ -526,11 +526,7 @@ static bool idpf_tx_singleq_clean(struct idpf_queue *tx_q, int napi_budget, int 
 
 #ifdef HAVE_XDP_SUPPORT
 		if (test_bit(__IDPF_Q_XDP, tx_q->flags))
-#ifdef HAVE_XDP_FRAME_STRUCT
 			xdp_return_frame(tx_buf->xdpf);
-#else
-			page_frag_free(tx_buf->raw_buf);
-#endif /* HAVE_XDP_FRAME_STRUCT */
 		else
 			/* free the skb */
 			napi_consume_skb(tx_buf->skb, napi_budget);

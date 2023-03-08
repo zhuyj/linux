@@ -163,11 +163,7 @@ struct idpf_tx_buf {
 	void *next_to_watch;
 	union {
 		struct sk_buff *skb;
-#ifdef HAVE_XDP_FRAME_STRUCT
 		struct xdp_frame *xdpf;
-#else
-		void *raw_buf;
-#endif
 	};
 	unsigned int bytecount;
 	unsigned short gso_segs;
@@ -871,11 +867,7 @@ void idpf_rx_singleq_bump_ntc(struct idpf_queue *q);
 bool idpf_rx_singleq_is_non_eop(struct idpf_queue *rxq,
 				union virtchnl2_rx_desc *rx_desc,
 				struct sk_buff *skb);
-#ifdef HAVE_XDP_FRAME_STRUCT
 int idpf_xmit_xdpq(struct xdp_frame *xdp, struct idpf_queue *xdpq);
-#else
-int idpf_xmit_xdpq(struct xdp_buff *xdp, struct idpf_queue *xdpq);
-#endif /* HAVE_XDP_FRAME_STRUCT */
 void idpf_rx_bump_ntc(struct idpf_queue *q);
 void idpf_tx_buf_rel(struct idpf_queue *tx_q, struct idpf_tx_buf *tx_buf);
 unsigned int idpf_size_to_txd_count(unsigned int size);

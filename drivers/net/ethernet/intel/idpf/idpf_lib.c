@@ -3043,9 +3043,6 @@ static const struct net_device_ops idpf_netdev_ops_splitq = {
 	.ndo_xdp = idpf_xdp,
 #endif /* HAVE_NDO_BPF */
 	.ndo_xdp_xmit = idpf_xdp_xmit,
-#ifndef NO_NDO_XDP_FLUSH
-	.ndo_xdp_flush = idpf_xdp_flush,
-#endif /* !NO_NDO_XDP_FLUSH */
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 	.ndo_xsk_wakeup = idpf_xsk_splitq_wakeup,
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
@@ -3083,9 +3080,6 @@ static const struct net_device_ops idpf_netdev_ops_singleq = {
 	.ndo_xdp = idpf_xdp,
 #endif /* HAVE_NDO_BPF */
 	.ndo_xdp_xmit = idpf_xdp_xmit,
-#ifndef NO_NDO_XDP_FLUSH
-	.ndo_xdp_flush = idpf_xdp_flush,
-#endif /* !NO_NDO_XDP_FLUSH */
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 	.ndo_xsk_wakeup = idpf_xsk_singleq_wakeup,
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
