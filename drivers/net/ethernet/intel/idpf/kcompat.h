@@ -6511,21 +6511,4 @@ const char *_kc_phy_speed_to_str(int speed);
 #include <linux/phy.h>
 #endif /* (LINUX < 4.14.0) || (SLES <= 12.3.0) || (RHEL <= 7.5) */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0))
-#if ((RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,6))) || \
-     (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(15,1,0))))
-#define HAVE_TC_CB_AND_SETUP_QDISC_MQPRIO
-#define HAVE_TCF_BLOCK
-#else /* RHEL >= 7.6 || SLES >= 15.1 */
-#endif /* !(RHEL >= 7.6) && !(SLES >= 15.1) */
-void _kc_ethtool_intersect_link_masks(struct ethtool_link_ksettings *dst,
-				      struct ethtool_link_ksettings *src);
-#define ethtool_intersect_link_masks _kc_ethtool_intersect_link_masks
-#else /* >= 4.15 */
-#define HAVE_XDP_BUFF_DATA_META
-#define HAVE_TC_CB_AND_SETUP_QDISC_MQPRIO
-#define HAVE_TCF_BLOCK
-#endif /* 4.15.0 */
-
 #endif /* _KCOMPAT_H_ */

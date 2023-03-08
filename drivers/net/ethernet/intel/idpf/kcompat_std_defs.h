@@ -109,7 +109,6 @@
 #define NEED_TC_SETUP_QDISC_MQPRIO
 #define NEED_NETDEV_XDP_STRUCT
 #else /* >= 4,15,0 */
-#define HAVE_TC_CB_AND_SETUP_QDISC_MQPRIO
 #define HAVE_NDO_BPF
 #endif /* 4,15,0 */
 
