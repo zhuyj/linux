@@ -4909,9 +4909,6 @@ of_get_mac_address(struct device_node __always_unused *np)
 #define HAVE_UDP_ENC_RX_OFFLOAD
 #endif /* RHEL >= 7.4 */
 #else  /* RHEL >= 8.0 */
-#define HAVE_TCF_BLOCK_CB_REGISTER_EXTACK
-#define NO_NETDEV_BPF_PROG_ATTACHED
-#define HAVE_NDO_SELECT_QUEUE_SB_DEV
 #endif /* RHEL >= 8.0 */
 #endif /* RHEL >= 7.0 */
 #endif /* >= 3.10.0 */
@@ -6652,44 +6649,5 @@ void _kc_pcie_print_link_status(struct pci_dev *dev);
 #define HAVE_NDO_XDP_XMIT_BULK_AND_FLAGS
 #define NO_NDO_XDP_FLUSH
 #endif /* 4.18.0 */
-
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,19,0))
-#define bitmap_alloc(nbits, flags) \
-	kmalloc_array(BITS_TO_LONGS(nbits), sizeof(unsigned long), flags)
-#define bitmap_zalloc(nbits, flags) bitmap_alloc(nbits, ((flags) | __GFP_ZERO))
-#define bitmap_free(bitmap) kfree(bitmap)
-#ifdef ETHTOOL_GLINKSETTINGS
-#define ethtool_ks_clear(ptr, name) \
-	ethtool_link_ksettings_zero_link_mode(ptr, name)
-#define ethtool_ks_add_mode(ptr, name, mode) \
-	ethtool_link_ksettings_add_link_mode(ptr, name, mode)
-#define ethtool_ks_del_mode(ptr, name, mode) \
-	ethtool_link_ksettings_del_link_mode(ptr, name, mode)
-#define ethtool_ks_test(ptr, name, mode) \
-	ethtool_link_ksettings_test_link_mode(ptr, name, mode)
-#endif /* ETHTOOL_GLINKSETTINGS */
-#define HAVE_NETPOLL_CONTROLLER
-#define REQUIRE_PCI_CLEANUP_AER_ERROR_STATUS
-#if (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(15,1,0)))
-#define HAVE_TCF_MIRRED_DEV
-#define HAVE_NDO_SELECT_QUEUE_SB_DEV
-#define HAVE_TCF_BLOCK_CB_REGISTER_EXTACK
-#endif
-
-static inline void __kc_metadata_dst_free(void *md_dst)
-{
-	kfree(md_dst);
-}
-
-#define metadata_dst_free(md_dst) __kc_metadata_dst_free(md_dst)
-#else /* >= 4.19.0 */
-#define HAVE_TCF_BLOCK_CB_REGISTER_EXTACK
-#define NO_NETDEV_BPF_PROG_ATTACHED
-#define HAVE_NDO_SELECT_QUEUE_SB_DEV
-#define HAVE_NETDEV_SB_DEV
-#define HAVE_TCF_VLAN_TPID
-#define HAVE_RHASHTABLE_TYPES
-#endif /* 4.19.0 */
 
 #endif /* _KCOMPAT_H_ */

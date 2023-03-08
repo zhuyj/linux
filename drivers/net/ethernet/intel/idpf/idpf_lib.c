@@ -2929,9 +2929,6 @@ static int idpf_xdp(struct net_device *dev, struct netdev_xdp *xdp)
 		current_prog = vport->adapter->vport_config[idx]->user_config.xdp_prog;
 		xdp->prog_id = current_prog ? current_prog->aux->id : 0;
 
-#ifndef NO_NETDEV_BPF_PROG_ATTACHED
-		xdp->prog_attached = idpf_xdp_is_prog_ena(vport);
-#endif /* !NO_NETDEV_BPF_PROG_ATTACHED */
 		return 0;
 #endif /* HAVE_XDP_QUERY_PROG */
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
