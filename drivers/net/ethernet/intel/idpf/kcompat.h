@@ -6777,21 +6777,4 @@ ptp_read_system_postts(struct ptp_system_timestamp __always_unused *sts)
 #define HAVE_TC_INDIR_BLOCK
 #endif /* 5.0.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5,1,0))
-#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,1)))
-#define HAVE_TC_FLOW_RULE_INFRASTRUCTURE
-#define HAVE_NDO_FDB_ADD_EXTACK
-#define HAVE_DEVLINK_INFO_GET
-#define HAVE_DEVLINK_FLASH_UPDATE
-#endif /* RHEL < 8.1 */
-#else /* >= 5.1.0 */
-#define HAVE_NDO_FDB_ADD_EXTACK
-#define NO_XDP_QUERY_XSK_UMEM
-#define HAVE_AF_XDP_NETDEV_UMEM
-#define HAVE_TC_FLOW_RULE_INFRASTRUCTURE
-#define HAVE_DEVLINK_INFO_GET
-#define HAVE_DEVLINK_FLASH_UPDATE
-#endif /* 5.1.0 */
-
 #endif /* _KCOMPAT_H_ */
