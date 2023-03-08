@@ -777,11 +777,8 @@ static int idpf_set_priv_flags(struct net_device *dev, u32 flags)
 	     !idpf_is_queue_model_split(vport->rxq_model)) &&
 	    (flags & BIT(__IDPF_PRIV_FLAGS_HDR_SPLIT)))
 		return -EOPNOTSUPP;
-#ifdef HAVE_XDP_SUPPORT
 	if (user_data->xdp_prog && (flags & BIT(__IDPF_PRIV_FLAGS_HDR_SPLIT)))
 		return -EOPNOTSUPP;
-
-#endif /* HAVE_XDP_SUPPORT */
 
 	bitmap_copy(orig_flags, user_data->user_flags, __IDPF_USER_FLAGS_NBITS);
 

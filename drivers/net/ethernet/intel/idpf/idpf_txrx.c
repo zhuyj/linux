@@ -103,14 +103,10 @@ void idpf_tx_buf_rel(struct idpf_queue *tx_q, struct idpf_tx_buf *tx_buf)
 					 dma_unmap_addr(tx_buf, dma),
 					 dma_unmap_len(tx_buf, len),
 					 DMA_TO_DEVICE);
-#ifdef HAVE_XDP_SUPPORT
 		if (test_bit(__IDPF_Q_XDP, tx_q->flags))
 			xdp_return_frame(tx_buf->xdpf);
 		else
 			dev_kfree_skb_any(tx_buf->skb);
-#else
-		dev_kfree_skb_any(tx_buf->skb);
-#endif /* HAVE_XDP_SUPPORT */
 	} else if (dma_unmap_len(tx_buf, len)) {
 		dma_unmap_page(tx_q->dev,
 			       dma_unmap_addr(tx_buf, dma),
@@ -132,14 +128,12 @@ static void idpf_tx_buf_rel_all(struct idpf_queue *txq)
 {
 	u16 i;
 
-#ifdef HAVE_XDP_SUPPORT
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 	if (test_bit(__IDPF_Q_XDP, txq->flags) && txq->xsk_pool) {
 		idpf_xsk_cleanup_xdpq(txq);
 		return;
 	}
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
-#endif /* HAVE_XDP_SUPPORT */
 
 	/* Buffers already cleared, nothing to do */
 	if (!txq->tx_buf)
@@ -171,10 +165,8 @@ static void idpf_tx_desc_rel(struct idpf_queue *txq, bool bufq)
 {
 	if (bufq) {
 		idpf_tx_buf_rel_all(txq);
-#ifdef HAVE_XDP_SUPPORT
 
 		if (!test_bit(__IDPF_Q_XDP, txq->flags))
-#endif /* HAVE_XDP_SUPPORT */
 			netdev_tx_reset_queue(netdev_get_tx_queue(txq->vport->netdev,
 								  txq->idx));
 	}
@@ -1166,7 +1158,6 @@ void idpf_vport_init_num_qs(struct idpf_vport *vport,
 		vport->num_complq = le16_to_cpu(vport_msg->num_tx_complq);
 	if (idpf_is_queue_model_split(vport->rxq_model))
 		vport->num_bufq = le16_to_cpu(vport_msg->num_rx_bufq);
-#ifdef HAVE_XDP_SUPPORT
 
 	vport->num_xdp_rxq = 0;
 	vport->xdp_rxq_offset = 0;
@@ -1184,7 +1175,6 @@ void idpf_vport_init_num_qs(struct idpf_vport *vport,
 		vport->num_xdp_complq = vport->num_xdp_txq;
 		vport->xdp_complq_offset = vport->xdp_txq_offset;
 	}
-#endif /* HAVE_XDP_SUPPORT */
 
 adjust_bufqs:
 	/* Adjust number of buffer queues per Rx queue group. */
@@ -1194,7 +1184,6 @@ adjust_bufqs:
 		return;
 	}
 
-#ifdef HAVE_XDP_SUPPORT
 	if (idpf_xdp_is_prog_ena(vport)) {
 		/* After loading the XDP program we will have only one buffer queue
 		 * per group with buffer size 4kB.
@@ -1209,14 +1198,6 @@ adjust_bufqs:
 		vport->bufq_size[0] = IDPF_RX_BUF_4096;
 		vport->bufq_size[1] = IDPF_RX_BUF_2048;
 	}
-#else /* HAVE_XDP_SUPPORT */
-	vport->num_bufqs_per_qgrp = IDPF_MAX_BUFQS_PER_RXQ_GRP;
-	/* Bufq[0] default buffer size is 4K
-	 * Bufq[1] default buffer size is 2K
-	 */
-	vport->bufq_size[0] = IDPF_RX_BUF_4096;
-	vport->bufq_size[1] = IDPF_RX_BUF_2048;
-#endif /* HAVE_XDP_SUPPORT */
 }
 
 /**
@@ -1337,7 +1318,6 @@ int idpf_vport_calc_total_qs(struct idpf_adapter *adapter, u16 vport_idx,
 					    (num_req_rx_qs ? num_req_rx_qs :
 					    dflt_singleq_rxqs));
 	}
-#ifdef HAVE_XDP_SUPPORT
 	if (!vport_config || !vport_config->user_config.xdp_prog)
 		return 0;
 
@@ -1354,7 +1334,6 @@ int idpf_vport_calc_total_qs(struct idpf_adapter *adapter, u16 vport_idx,
 	/* For XDP request only one bufq per Rx queue group */
 	if (idpf_is_queue_model_split(le16_to_cpu(vport_msg->rxq_model)))
 		vport_msg->num_rx_bufq = cpu_to_le16(num_rxq_grps);
-#endif /* HAVE_XDP_SUPPORT */
 
 	return 0;
 }
@@ -1515,7 +1494,6 @@ static void idpf_get_xsk_pool(struct idpf_queue *q, bool xdp_txq)
 }
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
 
-#ifdef HAVE_XDP_SUPPORT
 /**
  * idpf_xdp_rxq_init - Prepare and configure XDP structures on Rx queue
  * @q: rx queue where XDP should be initialized
@@ -1566,7 +1544,6 @@ err_alloc:
 	return err;
 }
 
-#endif /* HAVE_XDP_SUPPORT */
 /**
  * idpf_rxq_group_alloc - Allocate all rxq group resources
  * @vport: vport to allocate rxq groups for
@@ -1779,7 +1756,6 @@ int idpf_vport_queues_alloc(struct idpf_vport *vport)
 		}
 	}
 
-#ifdef HAVE_XDP_SUPPORT
 	if (idpf_xdp_is_prog_ena(vport)) {
 		int j;
 
@@ -1797,7 +1773,6 @@ int idpf_vport_queues_alloc(struct idpf_vport *vport)
 		}
 	}
 
-#endif /* HAVE_XDP_SUPPORT */
 	return 0;
 err_out:
 	idpf_vport_queues_rel(vport);
@@ -1857,15 +1832,11 @@ idpf_tx_splitq_clean_hdr(struct idpf_queue *tx_q, struct idpf_tx_buf *tx_buf,
 {
 	struct idpf_tx_queue_stats cleaned_stats = {0};
 
-#ifdef HAVE_XDP_SUPPORT
 	if (test_bit(__IDPF_Q_XDP, tx_q->flags))
 		xdp_return_frame(tx_buf->xdpf);
 	else
 		/* free the skb */
 		napi_consume_skb(tx_buf->skb, napi_budget);
-#else
-	napi_consume_skb(tx_buf->skb, napi_budget);
-#endif /* HAVE_XDP_SUPPORT */
 
 	if (dma_unmap_len(tx_buf, len))
 		idpf_tx_splitq_unmap_hdr(tx_q, tx_buf);
@@ -1921,12 +1892,10 @@ idpf_tx_clean_stashed_bufs(struct idpf_queue *txq, u16 compl_tag, u8 *desc_ts, i
 		if (stash->buf.compl_tag != compl_tag)
 			continue;
 
-#ifdef HAVE_XDP_SUPPORT
 		if (test_bit(__IDPF_Q_XDP, txq->flags)) {
 			cleaned_stats = idpf_tx_splitq_clean_hdr(txq, &stash->buf, budget);
 			goto stack;
 		}
-#endif /* HAVE_XDP_SUPPORT */
 		if (unlikely(stash->buf.skb)) {
 			/* fetch timestamp from completion
 			 * descriptor to report to stack
@@ -1941,9 +1910,7 @@ idpf_tx_clean_stashed_bufs(struct idpf_queue *txq, u16 compl_tag, u8 *desc_ts, i
 				       DMA_TO_DEVICE);
 			dma_unmap_len_set(&stash->buf, len, 0);
 		}
-#ifdef HAVE_XDP_SUPPORT
 stack:
-#endif /* HAVE_XDP_SUPPORT */
 		if (stash->miss_pkt)
 			del_timer(&stash->reinject_timer);
 
@@ -2221,13 +2188,11 @@ idpf_tx_clean_buf_ring(struct idpf_queue *txq, u16 compl_tag, u8 compl_type,
 	tx_buf = &txq->tx_buf[ring_idx];
 
 	while (tx_buf->compl_tag == compl_tag) {
-#ifdef HAVE_XDP_SUPPORT
 		if (test_bit(__IDPF_Q_XDP, txq->flags)) {
 			*stats = idpf_tx_splitq_clean_hdr(txq, tx_buf, budget);
 			continue;
 		}
 
-#endif /* HAVE_XDP_SUPPORT */
 		if (unlikely(compl_type == IDPF_TXD_COMPLT_REINJECTED)) {
 			idpf_stash_flow_sch_buffers(txq, tx_buf, compl_type);
 		} else if (tx_buf->skb) {
@@ -2323,13 +2288,11 @@ idpf_tx_handle_rs_completion(struct idpf_queue *txq,
 	if (test_bit(__IDPF_Q_FLOW_SCH_EN, txq->flags)) {
 		u16 compl_tag = le16_to_cpu(desc->q_head_compl_tag.compl_tag);
 		bool cleaned = false;
-#ifdef HAVE_XDP_SUPPORT
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 
 		if (txq->xsk_pool)
 			return idpf_tx_splitq_clean_zc(txq, compl_tag);
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
-#endif /* HAVE_XDP_SUPPORT */
 
 		cleaned = idpf_tx_clean_buf_ring(txq, compl_tag,
 						 IDPF_TXD_COMPLT_RS,
@@ -2494,11 +2457,9 @@ idpf_tx_clean_complq(struct idpf_queue *complq, int budget, int *cleaned)
 	s16 ntc = complq->next_to_clean;
 	bool clean_completed = false;
 	unsigned int complq_budget;
-#ifdef HAVE_XDP_SUPPORT
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 	bool xsk_completed = true;
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
-#endif /* HAVE_XDP_SUPPORT */
 	bool complq_ok = true;
 	int i;
 
@@ -2600,7 +2561,6 @@ fetch_next_desc:
 		struct idpf_queue *tx_q = complq->txq_grp->txqs[i];
 		struct netdev_queue *nq;
 
-#ifdef HAVE_XDP_SUPPORT
 		if (test_bit(__IDPF_Q_XDP, tx_q->flags)) {
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 			/* In splitq implementation we do not track Tx
@@ -2619,7 +2579,6 @@ fetch_next_desc:
 			continue;
 		}
 
-#endif /* HAVE_XDP_SUPPORT */
 		/* We didn't clean anything on this queue, move along */
 		if (!tx_q->cleaned_bytes)
 			continue;
@@ -2652,11 +2611,9 @@ fetch_next_desc:
 	complq->next_to_clean = ntc;
 
 	clean_completed = !!complq_budget;
-#ifdef HAVE_XDP_SUPPORT
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 	clean_completed = clean_completed && xsk_completed;
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
-#endif /* HAVE_XDP_SUPPORT */
 
 	return clean_completed;
 }
@@ -4271,7 +4228,6 @@ void idpf_rx_bump_ntc(struct idpf_queue *q)
 	change_bit(__IDPF_Q_GEN_CHK, q->flags);
 }
 
-#ifdef HAVE_XDP_SUPPORT
 /**
  * idpf_prepare_xdp_tx_splitq_desc - Prepare TX descriptor for XDP in single queue mode
  * @xdpq:      Pointer to XDP TX queue
@@ -4503,7 +4459,6 @@ int idpf_rx_xdp(struct idpf_queue *rxq, struct idpf_queue *xdpq,
 
 	return xdp_res;
 }
-#endif /* HAVE_XDP_SUPPORT */
 
 /**
  * idpf_rx_splitq_clean - Clean completed descriptors from Rx queue
@@ -4520,18 +4475,14 @@ int idpf_rx_xdp(struct idpf_queue *rxq, struct idpf_queue *xdpq,
 static int idpf_rx_splitq_clean(struct idpf_queue *rxq, int budget)
 {
 	int total_rx_bytes = 0, total_rx_pkts = 0;
-#ifdef HAVE_XDP_SUPPORT
 	unsigned int xdp_res, xdp_xmit = 0;
 	struct idpf_queue *xdpq = NULL;
-#endif /* HAVE_XDP_SUPPORT */
 	struct idpf_queue *rx_bufq = NULL;
 	struct sk_buff *skb = rxq->skb;
 	bool failure = false;
 
-#ifdef HAVE_XDP_SUPPORT
 	if (idpf_xdp_is_prog_ena(rxq->vport))
 		xdpq = idpf_get_related_xdp_queue(rxq);
-#endif /* HAVE_XDP_SUPPORT */
 
 	/* Process Rx packets bounded by budget */
 	while (likely(total_rx_pkts < budget)) {
@@ -4549,10 +4500,8 @@ static int idpf_rx_splitq_clean(struct idpf_queue *rxq, int budget)
 		int bufq_id;
 		u8 rxdid;
 
-#ifdef HAVE_XDP_SUPPORT
 		xdp_res = IDPF_XDP_PASS;
 
-#endif /* HAVE_XDP_SUPPORT */
 		/* get the Rx desc from Rx queue based on 'next_to_clean' */
 		rx_desc = IDPF_RX_DESC(rxq, rxq->next_to_clean);
 		splitq_flex_rx_desc = (struct virtchnl2_rx_flex_desc_adv_nic_3 *)rx_desc;
@@ -4630,7 +4579,6 @@ bypass_hsplit:
 			u64_stats_update_end(&rxq->stats_sync);
 		}
 
-#ifdef HAVE_XDP_SUPPORT
 		if (pkt_len && xdpq)
 			xdp_res = idpf_rx_xdp(rxq, xdpq, rx_buf, pkt_len);
 
@@ -4651,7 +4599,6 @@ bypass_hsplit:
 			idpf_rx_bump_ntc(rxq);
 			continue;
 		}
-#endif /* HAVE_XDP_SUPPORT */
 
 		if (pkt_len) {
 			if (skb)
@@ -4704,11 +4651,9 @@ bypass_hsplit:
 		/* update budget accounting */
 		total_rx_pkts++;
 	}
-#ifdef HAVE_XDP_SUPPORT
 	if (xdpq)
 		idpf_finalize_xdp_rx(xdpq, xdp_xmit);
 
-#endif /* HAVE_XDP_SUPPORT */
 	rxq->skb = skb;
 	u64_stats_update_begin(&rxq->stats_sync);
 	rxq->q_stats.rx.packets += total_rx_pkts;
@@ -5384,18 +5329,13 @@ static int idpf_vport_splitq_napi_poll(struct napi_struct *napi, int budget)
 static void idpf_vport_intr_map_vector_to_qs(struct idpf_vport *vport)
 {
 	int num_txq_grp = vport->num_txq_grp, bufq_vidx = 0;
-#ifdef HAVE_XDP_SUPPORT
 	bool is_xdp_prog_ena = idpf_xdp_is_prog_ena(vport);
-#endif /* HAVE_XDP_SUPPORT */
 	int i, j, qv_idx = 0, num_rxq, num_txq, q_index;
 	struct idpf_rxq_group *rx_qgrp;
 	struct idpf_txq_group *tx_qgrp;
 	struct idpf_queue *q, *bufq;
-#ifdef HAVE_XDP_SUPPORT
 	int num_active_rxq;
-#endif /* HAVE_XDP_SUPPORT */
 
-#ifdef HAVE_XDP_SUPPORT
 	if (is_xdp_prog_ena)
 		/* XDP Tx queues are handled within Rx loop,
 		 * correct num_txq_grp so that it stores number of
@@ -5404,7 +5344,6 @@ static void idpf_vport_intr_map_vector_to_qs(struct idpf_vport *vport)
 		 */
 		if (idpf_is_queue_model_split(vport->txq_model))
 			num_txq_grp = vport->xdp_txq_offset;
-#endif /* HAVE_XDP_SUPPORT */
 	for (i = 0; i < vport->num_rxq_grp; i++) {
 		rx_qgrp = &vport->rxq_grps[i];
 		if (idpf_is_queue_model_split(vport->rxq_model))
@@ -5412,9 +5351,7 @@ static void idpf_vport_intr_map_vector_to_qs(struct idpf_vport *vport)
 		else
 			num_rxq = rx_qgrp->singleq.num_rxq;
 
-#ifdef HAVE_XDP_SUPPORT
 		num_active_rxq = num_rxq - vport->num_xdp_rxq;
-#endif /* HAVE_XDP_SUPPORT */
 
 		for (j = 0; j < num_rxq; j++) {
 			if (qv_idx >= vport->num_q_vectors)
@@ -5428,7 +5365,6 @@ static void idpf_vport_intr_map_vector_to_qs(struct idpf_vport *vport)
 			q_index = q->q_vector->num_rxq;
 			q->q_vector->rx[q_index] = q;
 			q->q_vector->num_rxq++;
-#ifdef HAVE_XDP_SUPPORT
 			/* Do not setup XDP Tx queues for dummy Rx queues. */
 			if (j >= num_active_rxq)
 				goto skip_xdp_txq_config;
@@ -5452,7 +5388,6 @@ static void idpf_vport_intr_map_vector_to_qs(struct idpf_vport *vport)
 			}
 
 skip_xdp_txq_config:
-#endif /* HAVE_XDP_SUPPORT */
 			qv_idx++;
 		}
 
@@ -5484,10 +5419,8 @@ skip_xdp_txq_config:
 			q->q_vector->num_txq++;
 			qv_idx++;
 		} else {
-#ifdef HAVE_XDP_SUPPORT
 			num_txq = is_xdp_prog_ena ? tx_qgrp->num_txq - vport->xdp_txq_offset
 						  : tx_qgrp->num_txq;
-#endif /* HAVE_XDP_SUPPORT */
 			for (j = 0; j < num_txq; j++) {
 				if (qv_idx >= vport->num_q_vectors)
 					qv_idx = 0;
@@ -5598,7 +5531,6 @@ int idpf_vport_intr_alloc(struct idpf_vport *vport)
 	bufqs_per_vector = vport->num_bufqs_per_qgrp *
 			   DIV_ROUND_UP(vport->num_rxq_grp, vport->num_q_vectors);
 
-#ifdef HAVE_XDP_SUPPORT
 	/* For XDP we assign both Tx and XDP Tx queues
 	 * to the same q_vector.
 	 * Reserve doubled number of Tx queues per vector.
@@ -5606,7 +5538,6 @@ int idpf_vport_intr_alloc(struct idpf_vport *vport)
 	if (idpf_xdp_is_prog_ena(vport))
 		txqs_per_vector *= 2;
 
-#endif /* HAVE_XDP_SUPPORT */
 	for (v_idx = 0; v_idx < vport->num_q_vectors; v_idx++) {
 		q_vector = &vport->q_vectors[v_idx];
 		q_vector->vport = vport;
@@ -5722,7 +5653,6 @@ void idpf_fill_dflt_rss_lut(struct idpf_vport *vport)
 
 	rss_data =
 		&vport->adapter->vport_config[vport->idx]->user_config.rss_data;
-#ifdef HAVE_XDP_SUPPORT
 	/* When we use this code for legacy devices (e.g. in AVF driver), some Rx queues
 	 * may not be used because we would not be able to create XDP Tx queues for them.
 	 * In such a case do not add their queue IDs to the RSS LUT by setting
@@ -5730,7 +5660,6 @@ void idpf_fill_dflt_rss_lut(struct idpf_vport *vport)
 	 */
 	if (idpf_xdp_is_prog_ena(vport))
 		num_active_rxq -= vport->num_xdp_rxq;
-#endif /* HAVE_XDP_SUPPORT */
 
 	for (i = 0; i < rss_data->rss_lut_size; i++) {
 		rss_data->rss_lut[i] = i % num_active_rxq;

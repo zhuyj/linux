@@ -145,14 +145,12 @@
 
 #define IDPF_TXD_LAST_DESC_CMD (IDPF_TX_DESC_CMD_EOP | IDPF_TX_DESC_CMD_RS)
 
-#ifdef HAVE_XDP_SUPPORT
 #define IDPF_XDP_PASS		0
 #define IDPF_XDP_CONSUMED	BIT(0)
 #define IDPF_XDP_TX		BIT(1)
 #define IDPF_XDP_REDIR		BIT(2)
 
 #define IDPF_XDP_MAX_MTU        3046
-#endif /* HAVE_XDP_SUPPORT */
 
 union idpf_tx_flex_desc {
 	struct idpf_flex_tx_desc q; /* queue based scheduling */
@@ -445,9 +443,7 @@ enum idpf_queue_flags_t {
 	__IDPF_Q_ETF_EN,
 	__IDPF_Q_SW_MARKER,
 	__IDPF_Q_POLL_MODE,
-#ifdef HAVE_XDP_SUPPORT
 	__IDPF_Q_XDP,
-#endif /* HAVE_XDP_SUPPORT */
 	__IDPF_Q_FLAGS_NBITS,
 };
 
@@ -900,7 +896,6 @@ void idpf_get_stats64(struct net_device *netdev,
 struct rtnl_link_stats64 *idpf_get_stats64(struct net_device *netdev,
 					   struct rtnl_link_stats64 *stats);
 #endif /* HAVE_VOID_NDO_GET_STATS64 */
-#ifdef HAVE_XDP_SUPPORT
 int idpf_rx_xdp(struct idpf_queue *rxq, struct idpf_queue *xdpq,
 		struct idpf_rx_buf *rx_buf, unsigned int size);
 INDIRECT_CALLABLE_DECLARE(void *idpf_prepare_xdp_tx_splitq_desc(struct idpf_queue *xdpq,
@@ -915,10 +910,8 @@ INDIRECT_CALLABLE_DECLARE(void *idpf_prepare_xdp_tx_singleq_desc(struct idpf_que
 void *idpf_prepare_xdp_tx_singleq_desc(struct idpf_queue *xdpq, dma_addr_t dma,
 				       u16 idx, u32 size);
 int idpf_xdp_rxq_init(struct idpf_queue *q);
-#endif /* HAVE_XDP_SUPPORT */
 int idpf_tso(struct sk_buff *skb, struct idpf_tx_offload_params *off);
 
-#ifdef HAVE_XDP_SUPPORT
 /**
  * idpf_xdpq_update_tail - Updates the XDP Tx queue tail register
  * @xdpq: XDP Tx queue
@@ -951,5 +944,4 @@ static inline void idpf_finalize_xdp_rx(struct idpf_queue *xdpq, unsigned int xd
 	if (xdp_res & IDPF_XDP_TX)
 		idpf_xdpq_update_tail(xdpq);
 }
-#endif /* HAVE_XDP_SUPPORT */
 #endif /* !_IDPF_TXRX_H_ */

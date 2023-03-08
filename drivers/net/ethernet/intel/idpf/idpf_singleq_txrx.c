@@ -524,16 +524,11 @@ static bool idpf_tx_singleq_clean(struct idpf_queue *tx_q, int napi_budget, int 
 		total_bytes += tx_buf->bytecount;
 		total_pkts += tx_buf->gso_segs;
 
-#ifdef HAVE_XDP_SUPPORT
 		if (test_bit(__IDPF_Q_XDP, tx_q->flags))
 			xdp_return_frame(tx_buf->xdpf);
 		else
 			/* free the skb */
 			napi_consume_skb(tx_buf->skb, napi_budget);
-#else
-		napi_consume_skb(tx_buf->skb, napi_budget);
-#endif /* HAVE_XDP_SUPPORT */
-
 		/* unmap skb header data */
 		dma_unmap_single(tx_q->dev,
 				 dma_unmap_addr(tx_buf, dma),
@@ -588,10 +583,8 @@ fetch_next_txq_desc:
 	tx_q->q_stats.tx.packets += total_pkts;
 	tx_q->q_stats.tx.bytes += total_bytes;
 	u64_stats_update_end(&tx_q->stats_sync);
-#ifdef HAVE_XDP_SUPPORT
 	if (test_bit(__IDPF_Q_XDP, tx_q->flags))
 		return !!budget;
-#endif /* HAVE_XDP_SUPPORT */
 
 	vport = tx_q->vport;
 	nq = netdev_get_tx_queue(vport->netdev, tx_q->idx);
@@ -1226,17 +1219,13 @@ idpf_rx_singleq_extract_fields(struct idpf_queue *rx_q,
 static int idpf_rx_singleq_clean(struct idpf_queue *rx_q, int budget)
 {
 	unsigned int total_rx_bytes = 0, total_rx_pkts = 0;
-#ifdef HAVE_XDP_SUPPORT
 	unsigned int xdp_res = IDPF_XDP_PASS, xdp_xmit = 0;
 	struct idpf_queue *xdpq = NULL;
-#endif /* HAVE_XDP_SUPPORT */
 	u16 cleaned_count = 0;
 	bool failure = false;
 
-#ifdef HAVE_XDP_SUPPORT
 	if (idpf_xdp_is_prog_ena(rx_q->vport))
 		xdpq = idpf_get_related_xdp_queue(rx_q);
-#endif /* HAVE_XDP_SUPPORT */
 
 	/* Process Rx packets bounded by budget */
 	while (likely(total_rx_pkts < (unsigned int)budget)) {
@@ -1272,7 +1261,6 @@ static int idpf_rx_singleq_clean(struct idpf_queue *rx_q, int budget)
 		skb = idpf_rx_singleq_get_buf_page(rx_q->dev, rx_buf,
 						   fields.size);
 
-#ifdef HAVE_XDP_SUPPORT
 		if (xdpq)
 			xdp_res = idpf_rx_xdp(rx_q, xdpq, rx_buf, fields.size);
 		if (xdp_res) {
@@ -1293,7 +1281,6 @@ static int idpf_rx_singleq_clean(struct idpf_queue *rx_q, int budget)
 			idpf_rx_singleq_bump_ntc(rx_q);
 			continue;
 		}
-#endif /* HAVE_XDP_SUPPORT */
 
 		if (skb)
 			idpf_rx_add_frag(rx_buf, skb, fields.size);
@@ -1346,10 +1333,8 @@ static int idpf_rx_singleq_clean(struct idpf_queue *rx_q, int budget)
 	if (cleaned_count)
 		failure = idpf_rx_singleq_buf_hw_alloc_all(rx_q, cleaned_count);
 
-#ifdef HAVE_XDP_SUPPORT
 	if (xdpq)
 		idpf_finalize_xdp_rx(xdpq, xdp_xmit);
-#endif /* HAVE_XDP_SUPPORT */
 
 	u64_stats_update_begin(&rx_q->stats_sync);
 	rx_q->q_stats.rx.packets += total_rx_pkts;
@@ -1435,7 +1420,6 @@ int idpf_vport_singleq_napi_poll(struct napi_struct *napi, int budget)
 	return work_done;
 }
 
-#ifdef HAVE_XDP_SUPPORT
 /**
  * idpf_prepare_xdp_tx_singleq_desc - Prepare TX descriptor for XDP in single queue mode
  * @xdpq: Pointer to XDP TX queue
@@ -1459,4 +1443,3 @@ void *idpf_prepare_xdp_tx_singleq_desc(struct idpf_queue *xdpq, dma_addr_t dma,
 
 	return (void *)tx_desc;
 }
-#endif /* HAVE_XDP_SUPPORT */

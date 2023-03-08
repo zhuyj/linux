@@ -1156,13 +1156,11 @@ void idpf_vport_set_hsplit(struct idpf_vport *vport, bool ena)
 	struct idpf_vport_user_config_data *config_data;
 
 	config_data = &vport->adapter->vport_config[vport->idx]->user_config;
-#ifdef HAVE_XDP_SUPPORT
 	if (!ena) {
 		clear_bit(__IDPF_PRIV_FLAGS_HDR_SPLIT, config_data->user_flags);
 		return;
 	}
 
-#endif /* HAVE_XDP_SUPPORT */
 	if (idpf_is_cap_ena_all(vport->adapter, IDPF_HSPLIT_CAPS,
 				IDPF_CAP_HSPLIT) &&
 	    idpf_is_queue_model_split(vport->rxq_model))
@@ -1350,15 +1348,11 @@ static int idpf_set_real_num_queues(struct idpf_vport *vport)
 	err = netif_set_real_num_rx_queues(vport->netdev, vport->num_rxq);
 	if (err)
 		goto error;
-#ifdef HAVE_XDP_SUPPORT
 	if (idpf_xdp_is_prog_ena(vport))
 		err = netif_set_real_num_tx_queues(vport->netdev,
 						   vport->num_txq - vport->num_xdp_txq);
 	else
 		err = netif_set_real_num_tx_queues(vport->netdev, vport->num_txq);
-#else
-	err = netif_set_real_num_tx_queues(vport->netdev, vport->num_txq);
-#endif /* HAVE_XDP_SUPPORT */
 error:
 	if (test_bit(__IDPF_HR_RESET_IN_PROG, vport->adapter->flags))
 		rtnl_unlock();
@@ -1417,7 +1411,6 @@ static void idpf_rx_init_buf_tail(struct idpf_vport *vport)
 	}
 }
 
-#ifdef HAVE_XDP_SUPPORT
 /**
  * idpf_vport_xdp_init - Prepare and configure XDP structures
  * @vport: vport where XDP should be initialized
@@ -1493,7 +1486,6 @@ exit_xdp_init:
 	return err;
 }
 
-#endif /* HAVE_XDP_SUPPORT */
 /**
  * idpf_vport_open - Bring up a vport
  * @vport: vport to bring up
@@ -1518,10 +1510,8 @@ static int idpf_vport_open(struct idpf_vport *vport, bool alloc_res)
 			return err;
 	}
 
-#ifdef HAVE_XDP_SUPPORT
 	idpf_vport_xdp_init(vport);
 
-#endif /* HAVE_XDP_SUPPORT */
 	err = idpf_vport_intr_alloc(vport);
 	if (err) {
 		dev_err(&adapter->pdev->dev, "Call to interrupt alloc returned %d\n",
@@ -1976,7 +1966,6 @@ static void idpf_vc_event_task(struct work_struct *work)
 	}
 }
 
-#ifdef HAVE_XDP_SUPPORT
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 /**
  * idpf_vport_copy_xdp_data - Deep copy XDP specific data from one vport to another
@@ -2003,7 +1992,6 @@ static int idpf_vport_copy_xdp_data(struct idpf_vport *dst_vport, struct idpf_vp
 }
 
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
-#endif /* HAVE_XDP_SUPPORT */
 /**
  * idpf_initiate_soft_reset - Initiate a software reset
  * @vport: virtual port data struct
@@ -2049,13 +2037,11 @@ int idpf_initiate_soft_reset(struct idpf_vport *vport,
 	 */
 	memcpy(new_vport, vport, offsetof(struct idpf_vport, state));
 
-#ifdef HAVE_XDP_SUPPORT
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 	/* Perform a deep copy of some XDP data */
 	idpf_vport_copy_xdp_data(new_vport, vport);
 
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
-#endif /* HAVE_XDP_SUPPORT */
 	/* Adjust resource parameters prior to reallocating resources */
 	switch (reset_cause) {
 	case __IDPF_SR_Q_CHANGE:
@@ -2104,22 +2090,18 @@ int idpf_initiate_soft_reset(struct idpf_vport *vport,
 				       new_vport->num_bufq);
 	if (err)
 		goto err_reset;
-#ifdef HAVE_XDP_SUPPORT
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 	bitmap_free(vport->af_xdp_zc_qps);
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
-#endif /* HAVE_XDP_SUPPORT */
 
 	/* Same comment as above regarding avoiding copying the wait_queues and
 	 * mutexes applies here. We do not want to mess with those if possible.
 	 */
 	memcpy(vport, new_vport, offsetof(struct idpf_vport, state));
-#ifdef HAVE_XDP_SUPPORT
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 	idpf_vport_copy_xdp_data(vport, new_vport);
 	bitmap_free(new_vport->af_xdp_zc_qps);
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
-#endif /* HAVE_XDP_SUPPORT */
 
 	/* Since idpf_vport_queues_alloc was called with new_port, the queue
 	 * back pointers are currently pointing to the local new_vport. Reset
@@ -2684,14 +2666,12 @@ static int idpf_change_mtu(struct net_device *netdev, int new_mtu)
 		return -EINVAL;
 	}
 #endif /* HAVE_NETDEVICE_MIN_MAX_MTU */
-#ifdef HAVE_XDP_SUPPORT
 
 	if (idpf_xdp_is_prog_ena(vport) && new_mtu > IDPF_XDP_MAX_MTU) {
 		netdev_err(netdev, "New MTU value is not valid. The maximum MTU value is %d.\n",
 			   IDPF_XDP_MAX_MTU);
 		return -EINVAL;
 	}
-#endif /* HAVE_XDP_SUPPORT */
 	netdev->mtu = new_mtu;
 
 	return idpf_initiate_soft_reset(vport, __IDPF_SR_MTU_CHANGE);
@@ -2847,7 +2827,6 @@ static int idpf_setup_tc(struct net_device *netdev, enum tc_setup_type type,
 	}
 }
 
-#ifdef HAVE_XDP_SUPPORT
 /**
  * idpf_vport_set_xdp_tx_desc_handler - Set a handler function for XDP Tx descriptor
  * @vport: vport to setup XDP Tx descriptor handler for
@@ -2939,7 +2918,6 @@ static int idpf_xdp(struct net_device *dev, struct netdev_xdp *xdp)
 		return -EINVAL;
 	}
 }
-#endif /* HAVE_XDP_SUPPORT */
 
 /**
  * idpf_set_mac - NDO callback to set port mac address
@@ -3036,7 +3014,6 @@ static const struct net_device_ops idpf_netdev_ops_splitq = {
 #else
 	.ndo_setup_tc = idpf_setup_tc,
 #endif /* HAVE_RHEL7_NETDEV_OPS_EXT_NDO_SETUP_TC */
-#ifdef HAVE_XDP_SUPPORT
 #ifdef HAVE_NDO_BPF
 	.ndo_bpf = idpf_xdp,
 #else
@@ -3046,7 +3023,6 @@ static const struct net_device_ops idpf_netdev_ops_splitq = {
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 	.ndo_xsk_wakeup = idpf_xsk_splitq_wakeup,
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
-#endif /* HAVE_XDP_SUPPORT */
 };
 
 static const struct net_device_ops idpf_netdev_ops_singleq = {
@@ -3073,7 +3049,6 @@ static const struct net_device_ops idpf_netdev_ops_singleq = {
 #else
 	.ndo_setup_tc = idpf_setup_tc,
 #endif /* HAVE_RHEL7_NETDEV_OPS_EXT_NDO_SETUP_TC */
-#ifdef HAVE_XDP_SUPPORT
 #ifdef HAVE_NDO_BPF
 	.ndo_bpf = idpf_xdp,
 #else
@@ -3083,5 +3058,4 @@ static const struct net_device_ops idpf_netdev_ops_singleq = {
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 	.ndo_xsk_wakeup = idpf_xsk_singleq_wakeup,
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
-#endif /* HAVE_XDP_SUPPORT */
 };

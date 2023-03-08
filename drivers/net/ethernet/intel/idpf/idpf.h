@@ -56,11 +56,9 @@ struct idpf_vport_max_q;
 #include "virtchnl2.h"
 #include "idpf_txrx.h"
 #include "idpf_controlq.h"
-#ifdef HAVE_XDP_SUPPORT
 #include <linux/bpf_trace.h>
 #include <linux/filter.h>
 #include <linux/bpf.h>
-#endif /* HAVE_XDP_SUPPORT */
 #ifdef HAVE_NETDEV_BPF_XSK_POOL
 #include "idpf_xsk.h"
 #endif /* HAVE_NETDEV_BPF_XSK_POOL */
@@ -457,7 +455,6 @@ struct idpf_vport {
 	enum idpf_tw_tstamp_granularity ts_gran;
 	enum idpf_tw_horizon tw_horizon;
 
-#ifdef HAVE_XDP_SUPPORT
 	/* XDP TX */
 	int num_xdp_txq;
 	int num_xdp_rxq;
@@ -471,7 +468,6 @@ struct idpf_vport {
 #endif
 	void *(*xdp_prepare_tx_desc)(struct idpf_queue *xdpq, dma_addr_t dma,
 				     u16 idx, u32 size);
-#endif /* HAVE_XDP_SUPPORT */
 
 	/* RX */
 	int num_rxq;
@@ -579,10 +575,8 @@ struct idpf_vport_user_config_data {
 	u32 num_req_rx_qs; /* user requested RX queues through ethtool */
 	u32 num_req_txq_desc; /* user requested TX queue descriptors through ethtool */
 	u32 num_req_rxq_desc; /* user requested RX queue descriptors through ethtool */
-#ifdef HAVE_XDP_SUPPORT
 	/* Duplicated in queue structure for performance reasons */
 	struct bpf_prog *xdp_prog;
-#endif /* HAVE_XDP_SUPPORT */
 	DECLARE_BITMAP(user_flags, __IDPF_USER_FLAGS_NBITS);
 	DECLARE_BITMAP(etf_qenable, IDPF_LARGE_MAX_Q);
 	struct list_head mac_filter_list;
@@ -731,7 +725,6 @@ static inline int idpf_is_queue_model_split(u16 q_model)
 	return (q_model == VIRTCHNL2_QUEUE_MODEL_SPLIT);
 }
 
-#ifdef HAVE_XDP_SUPPORT
 /**
  * idpf_xdp_is_prog_ena - check if there is an XDP program on adapter
  * @vport: vport to check
@@ -754,8 +747,6 @@ static inline struct idpf_queue *idpf_get_related_xdp_queue(struct idpf_queue *r
 {
 		return rxq->vport->txqs[rxq->idx + rxq->vport->xdp_txq_offset];
 }
-
-#endif /* HAVE_XDP_SUPPORT */
 
 #define idpf_is_cap_ena(adapter, field, flag) \
 	idpf_is_capability_ena(adapter, false, field, flag)
@@ -949,11 +940,7 @@ static inline bool idpf_is_reset_in_prog(struct idpf_adapter *adapter)
 static inline unsigned int
 idpf_rx_offset(struct idpf_queue __maybe_unused *rx_q)
 {
-#ifdef HAVE_XDP_SUPPORT
 	return idpf_xdp_is_prog_ena(rx_q->vport) ? XDP_PACKET_HEADROOM : 0;
-#else
-	return 0;
-#endif /* HAVE_XDP_SUPPORT */
 }
 
 int idpf_vport_adjust_qs(struct idpf_vport *vport);
@@ -1055,10 +1042,8 @@ int idpf_send_destroy_adi_msg(struct idpf_adapter *adapter,
 void idpf_vport_intr_write_itr(struct idpf_q_vector *q_vector,
 			       u16 itr, bool tx);
 int idpf_send_map_unmap_queue_vector_msg(struct idpf_vport *vport, bool map);
-#ifdef HAVE_XDP_SUPPORT
 int idpf_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
 		  u32 flags);
-#endif /* HAVE_XDP_SUPPORT */
 int idpf_get_max_vfs(struct idpf_adapter *adapter);
 int idpf_send_set_sriov_vfs_msg(struct idpf_adapter *adapter, u16 num_vfs);
 int idpf_sriov_configure(struct pci_dev *pdev, int num_vfs);

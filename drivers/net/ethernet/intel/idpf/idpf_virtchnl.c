@@ -3543,7 +3543,6 @@ int idpf_vport_alloc_vec_indexes(struct idpf_vport *vport)
 	vec_info.num_req_vecs = max_t(u16, vport->num_txq, vport->num_rxq);
 	vec_info.default_vport = vport->default_vport;
 	vec_info.index = vport->idx;
-#ifdef HAVE_XDP_SUPPORT
 
 	/* Additional XDP Tx queues share the q_vector with regular Tx and Rx queues
 	 * to which they are assigned. Also, according to DCR-3692 XDP shall request
@@ -3555,7 +3554,6 @@ int idpf_vport_alloc_vec_indexes(struct idpf_vport *vport)
 		vec_info.num_req_vecs = max_t(u16,
 					      vport->num_txq - vport->num_xdp_txq,
 					      vport->num_rxq);
-#endif /* HAVE_XDP_SUPPORT */
 
 	num_alloc_vecs = idpf_req_rel_vector_indexes(vport->adapter,
 						     vport->q_vector_idxs,
@@ -3612,14 +3610,10 @@ void idpf_vport_init(struct idpf_vport *vport, struct idpf_vport_max_q *max_q)
 	memcpy(vport->rx_itr_profile, rx_itr, IDPF_DIM_PROFILE_SLOTS);
 	memcpy(vport->tx_itr_profile, tx_itr, IDPF_DIM_PROFILE_SLOTS);
 
-#ifdef HAVE_XDP_SUPPORT
 	if (idpf_xdp_is_prog_ena(vport))
 		idpf_vport_set_hsplit(vport, false);
 	else
 		idpf_vport_set_hsplit(vport, true);
-#else
-	idpf_vport_set_hsplit(vport, true);
-#endif /* HAVE_XDP_SUPPORT */
 
 	vport->ts_gran = IDPF_TW_TIME_STAMP_GRAN_512_DIV_S;
 	vport->tw_horizon = IDPF_TW_HORIZON_512MS;
