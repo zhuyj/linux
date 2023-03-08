@@ -6312,38 +6312,4 @@ static inline void _kc_dev_consume_skb_any(struct sk_buff *skb)
 #define HAVE_MIN_NAPI_ID
 #endif /* 4.12 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,13,0))
-#define  PCI_EXP_LNKCAP_SLS_8_0GB 0x00000003 /* LNKCAP2 SLS Vector bit 2 */
-#if (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(12,4,0)))
-#define HAVE_PCI_ERROR_HANDLER_RESET_PREPARE
-#endif /* SLES >= 12sp4 */
-#if (!(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,5)) && \
-     !(SLE_VERSION_CODE >= SLE_VERSION(12,4,0)))
-#define UUID_SIZE 16
-typedef struct {
-	__u8 b[UUID_SIZE];
-} uuid_t;
-#define UUID_INIT(a, b, c, d0, d1, d2, d3, d4, d5, d6, d7)		\
-((uuid_t)								\
-{{ ((a) >> 24) & 0xff, ((a) >> 16) & 0xff, ((a) >> 8) & 0xff, (a) & 0xff, \
-   ((b) >> 8) & 0xff, (b) & 0xff,					\
-   ((c) >> 8) & 0xff, (c) & 0xff,					\
-   (d0), (d1), (d2), (d3), (d4), (d5), (d6), (d7) }})
-
-static inline bool uuid_equal(const uuid_t *u1, const uuid_t *u2)
-{
-	return memcmp(u1, u2, sizeof(uuid_t)) == 0;
-}
-#else
-#define HAVE_METADATA_PORT_INFO
-#endif /* !(RHEL >= 7.5) && !(SLES >= 12.4) */
-#else /* > 4.13 */
-#define HAVE_METADATA_PORT_INFO
-#define HAVE_HWTSTAMP_FILTER_NTP_ALL
-#define HAVE_NDO_SETUP_TC_CHAIN_INDEX
-#define HAVE_PCI_ERROR_HANDLER_RESET_PREPARE
-#define HAVE_PTP_CLOCK_DO_AUX_WORK
-#endif /* 4.13.0 */
-
 #endif /* _KCOMPAT_H_ */
