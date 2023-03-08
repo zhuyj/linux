@@ -3009,11 +3009,7 @@ static const struct net_device_ops idpf_netdev_ops_splitq = {
 	.ndo_fix_features = idpf_fix_features,
 	.ndo_set_features = idpf_set_features,
 	.ndo_tx_timeout = idpf_tx_timeout,
-#ifdef HAVE_RHEL7_NETDEV_OPS_EXT_NDO_SETUP_TC
-	.extended.ndo_setup_tc_rh = idpf_setup_tc,
-#else
 	.ndo_setup_tc = idpf_setup_tc,
-#endif /* HAVE_RHEL7_NETDEV_OPS_EXT_NDO_SETUP_TC */
 #ifdef HAVE_NDO_BPF
 	.ndo_bpf = idpf_xdp,
 #else
@@ -3044,11 +3040,7 @@ static const struct net_device_ops idpf_netdev_ops_singleq = {
 	.ndo_fix_features = idpf_fix_features,
 	.ndo_set_features = idpf_set_features,
 	.ndo_tx_timeout = idpf_tx_timeout,
-#ifdef HAVE_RHEL7_NETDEV_OPS_EXT_NDO_SETUP_TC
-	.extended.ndo_setup_tc_rh = idpf_setup_tc,
-#else
 	.ndo_setup_tc = idpf_setup_tc,
-#endif /* HAVE_RHEL7_NETDEV_OPS_EXT_NDO_SETUP_TC */
 #ifdef HAVE_NDO_BPF
 	.ndo_bpf = idpf_xdp,
 #else

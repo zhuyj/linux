@@ -6314,10 +6314,6 @@ static inline void _kc_dev_consume_skb_any(struct sk_buff *skb)
 
 /*****************************************************************************/
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4,13,0))
-#if ((SLE_VERSION_CODE && (SLE_VERSION_CODE > SLE_VERSION(12,3,0))) || \
-     (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,5)))
-#define HAVE_TCF_EXTS_HAS_ACTION
-#endif
 #define  PCI_EXP_LNKCAP_SLS_8_0GB 0x00000003 /* LNKCAP2 SLS Vector bit 2 */
 #if (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(12,4,0)))
 #define HAVE_PCI_ERROR_HANDLER_RESET_PREPARE
@@ -6349,53 +6345,5 @@ static inline bool uuid_equal(const uuid_t *u1, const uuid_t *u2)
 #define HAVE_PCI_ERROR_HANDLER_RESET_PREPARE
 #define HAVE_PTP_CLOCK_DO_AUX_WORK
 #endif /* 4.13.0 */
-
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0))
-#ifdef ETHTOOL_GLINKSETTINGS
-#ifndef ethtool_link_ksettings_del_link_mode
-#define ethtool_link_ksettings_del_link_mode(ptr, name, mode)		\
-	__clear_bit(ETHTOOL_LINK_MODE_ ## mode ## _BIT, (ptr)->link_modes.name)
-#endif
-#endif /* ETHTOOL_GLINKSETTINGS */
-#if (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(12,4,0)))
-#define HAVE_NDO_SETUP_TC_REMOVE_TC_TO_NETDEV
-#endif
-
-#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,5)))
-#define HAVE_NDO_SETUP_TC_REMOVE_TC_TO_NETDEV
-#define HAVE_RHEL7_NETDEV_OPS_EXT_NDO_SETUP_TC
-#endif
-
-#define TIMER_DATA_TYPE		unsigned long
-#define TIMER_FUNC_TYPE		void (*)(TIMER_DATA_TYPE)
-
-#define timer_setup(timer, callback, flags)				\
-	__setup_timer((timer), (TIMER_FUNC_TYPE)(callback),		\
-		      (TIMER_DATA_TYPE)(timer), (flags))
-
-#define from_timer(var, callback_timer, timer_fieldname) \
-	container_of(callback_timer, typeof(*var), timer_fieldname)
-
-#ifndef xdp_do_flush_map
-#define xdp_do_flush_map() do {} while (0)
-#endif
-struct _kc_xdp_buff {
-	void *data;
-	void *data_end;
-	void *data_hard_start;
-};
-#define xdp_buff _kc_xdp_buff
-struct _kc_bpf_prog {
-};
-#define bpf_prog _kc_bpf_prog
-#ifndef DIV_ROUND_DOWN_ULL
-#define DIV_ROUND_DOWN_ULL(ll, d) \
-	({ unsigned long long _tmp = (ll); do_div(_tmp, d); _tmp; })
-#endif /* DIV_ROUND_DOWN_ULL */
-#else /* > 4.14 */
-#define HAVE_NDO_SETUP_TC_REMOVE_TC_TO_NETDEV
-#define HAVE_TCF_EXTS_HAS_ACTION
-#endif /* 4.14.0 */
 
 #endif /* _KCOMPAT_H_ */
