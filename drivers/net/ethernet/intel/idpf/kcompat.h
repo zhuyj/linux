@@ -5834,48 +5834,4 @@ _kc_skb_flow_dissect_flow_keys(const struct sk_buff *skb,
 #include <net/dst_metadata.h>
 #endif /* 4.3.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,4,0))
-#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,3))
-#define HAVE_NDO_SET_VF_TRUST
-#endif /* (RHEL_RELEASE >= 7.3) */
-#ifndef CONFIG_64BIT
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,3,0))
-#include <asm-generic/io-64-nonatomic-lo-hi.h>	/* 32-bit readq/writeq */
-#else /* 3.3.0 => 4.3.x */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26))
-#include <asm-generic/int-ll64.h>
-#endif /* 2.6.26 => 3.3.0 */
-#ifndef readq
-static inline __u64 readq(const volatile void __iomem *addr)
-{
-	const volatile u32 __iomem *p = addr;
-	u32 low, high;
-
-	low = readl(p);
-	high = readl(p + 1);
-
-	return low + ((u64)high << 32);
-}
-#define readq readq
-#endif
-
-#ifndef writeq
-static inline void writeq(__u64 val, volatile void __iomem *addr)
-{
-	writel(val, addr);
-	writel(val >> 32, (u8 *)addr + 4);
-}
-#define writeq writeq
-#endif
-#endif /* < 3.3.0 */
-#endif /* !CONFIG_64BIT */
-#else /* < 4.4.0 */
-#define HAVE_NDO_SET_VF_TRUST
-
-#ifndef CONFIG_64BIT
-#include <linux/io-64-nonatomic-lo-hi.h>	/* 32-bit readq/writeq */
-#endif /* !CONFIG_64BIT */
-#endif /* 4.4.0 */
-
 #endif /* _KCOMPAT_H_ */
