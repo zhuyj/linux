@@ -6063,47 +6063,4 @@ pci_release_mem_regions(struct pci_dev *pdev)
 #define HAVE_ETHTOOL_NEW_50G_BITS
 #endif /* 4.8.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,9,0))
-#ifdef HAVE_TC_SETUP_CLSFLOWER
-#if (!(RHEL_RELEASE_CODE) && !(SLE_VERSION_CODE) || \
-    (SLE_VERSION_CODE && (SLE_VERSION_CODE < SLE_VERSION(12,3,0))))
-#define HAVE_TC_FLOWER_VLAN_IN_TAGS
-#endif /* !RHEL_RELEASE_CODE && !SLE_VERSION_CODE || <SLE_VERSION(12,3,0) */
-#endif /* HAVE_TC_SETUP_CLSFLOWER */
-#if (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,4))
-#define HAVE_ETHTOOL_NEW_1G_BITS
-#define HAVE_ETHTOOL_NEW_10G_BITS
-#endif /* RHEL7.4+ */
-#if (RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,4))
-static inline void bitmap_from_u64(unsigned long *dst, u64 mask)
-{
-	dst[0] = mask & ULONG_MAX;
-
-	if (sizeof(mask) > sizeof(unsigned long))
-		dst[1] = mask >> 32;
-}
-#endif /* <RHEL7.4 */
-#if (!(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,4)) && \
-     !(SLE_VERSION_CODE >= SLE_VERSION(12,3,0)) && \
-     !(UBUNTU_VERSION_CODE >= UBUNTU_VERSION(4,13,0,16)))
-static inline bool eth_type_vlan(__be16 ethertype)
-{
-	switch (ethertype) {
-	case htons(ETH_P_8021Q):
-#ifdef ETH_P_8021AD
-	case htons(ETH_P_8021AD):
-#endif
-		return true;
-	default:
-		return false;
-	}
-}
-#endif /* Linux < 4.9 || RHEL < 7.4 || SLES < 12.3 || Ubuntu < 4.3.0-16 */
-#else /* >=4.9 */
-#define HAVE_FLOW_DISSECTOR_KEY_VLAN_PRIO
-#define HAVE_ETHTOOL_NEW_1G_BITS
-#define HAVE_ETHTOOL_NEW_10G_BITS
-#endif /* KERNEL_VERSION(4.9.0) */
-
 #endif /* _KCOMPAT_H_ */
