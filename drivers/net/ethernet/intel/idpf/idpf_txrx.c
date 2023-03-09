@@ -372,13 +372,8 @@ static void idpf_rx_page_rel(struct idpf_queue *rxq,
 		return;
 
 	/* free resources associated with mapping */
-#ifndef HAVE_STRUCT_DMA_ATTRS
 	dma_unmap_page_attrs(rxq->dev, page_info->dma, PAGE_SIZE,
 			     DMA_FROM_DEVICE, IDPF_RX_DMA_ATTR);
-#else
-	dma_unmap_page(rxq->dev, page_info->dma, PAGE_SIZE,
-		       DMA_FROM_DEVICE);
-#endif /* !HAVE_STRUCT_DMA_ATTRS */
 
 	__page_frag_cache_drain(page_info->page, page_info->pagecnt_bias);
 
@@ -565,14 +560,9 @@ idpf_alloc_page(struct idpf_queue *rxbufq, struct idpf_page_info *page_info)
 		return -ENOMEM;
 
 	/* map page for use */
-#ifndef HAVE_STRUCT_DMA_ATTRS
 	page_info->dma = dma_map_page_attrs(rxbufq->dev, page_info->page,
 					    0, PAGE_SIZE, DMA_FROM_DEVICE,
 					    IDPF_RX_DMA_ATTR);
-#else
-	page_info->dma = dma_map_page(rxbufq->dev, page_info->page, 0, PAGE_SIZE,
-				      DMA_FROM_DEVICE);
-#endif /* !HAVE_STRUCT_DMA_ATTRS */
 
 	/* if mapping failed free memory back to system since
 	 * there isn't much point in holding memory we can't use
@@ -4179,13 +4169,8 @@ static void idpf_rx_splitq_recycle_buf(struct idpf_queue *rxbufq,
 	}
 
 	/* we are not reusing the buffer so unmap it */
-#ifndef HAVE_STRUCT_DMA_ATTRS
 	dma_unmap_page_attrs(rxbufq->dev, page_info->dma, PAGE_SIZE,
 			     DMA_FROM_DEVICE, IDPF_RX_DMA_ATTR);
-#else
-	dma_unmap_page(rxbufq->dev, page_info->dma, PAGE_SIZE,
-		       DMA_FROM_DEVICE);
-#endif /* !HAVE_STRUCT_DMA_ATTRS */
 	__page_frag_cache_drain(page_info->page,
 				page_info->pagecnt_bias);
 

@@ -1056,13 +1056,8 @@ static bool idpf_rx_singleq_recycle_buf(struct idpf_queue *rxq,
 		recycled = true;
 	} else {
 		/* we are not reusing the buffer so unmap it */
-#ifndef HAVE_STRUCT_DMA_ATTRS
-		dma_unmap_page_attrs(rxq->dev, page_info->dma, PAGE_SIZE,
-				     DMA_FROM_DEVICE, IDPF_RX_DMA_ATTR);
-#else
 		dma_unmap_page(rxq->dev, page_info->dma, PAGE_SIZE,
 			       DMA_FROM_DEVICE);
-#endif /* !HAVE_STRUCT_DMA_ATTRS */
 		__page_frag_cache_drain(page_info->page,
 					page_info->pagecnt_bias);
 	}

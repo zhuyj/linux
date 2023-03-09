@@ -782,17 +782,10 @@ static int idpf_cfg_netdev(struct idpf_vport *vport)
 	/* setup watchdog timeout value to be 5 second */
 	netdev->watchdog_timeo = 5 * HZ;
 
-#ifdef HAVE_NETDEVICE_MIN_MAX_MTU
 	/* configure default MTU size */
-#ifdef HAVE_RHEL7_EXTENDED_MIN_MAX_MTU
-	netdev->extended->min_mtu = ETH_MIN_MTU;
-	netdev->extended->max_mtu = vport->max_mtu;
-#else /* HAVE_REHL7_EXTENDED_MIN_MAX_MTU */
 	netdev->min_mtu = ETH_MIN_MTU;
 	netdev->max_mtu = vport->max_mtu;
-#endif /* HAVE_RHEL7_EXTENDED_MIN_MAX_MTU */
 
-#endif /* HAVE_NETDEVICE_MIN_MAX_MTU */
 	dflt_features = NETIF_F_SG	|
 			NETIF_F_HIGHDMA;
 
@@ -2633,18 +2626,6 @@ static int idpf_change_mtu(struct net_device *netdev, int new_mtu)
 	if (!vport)
 		return -EINVAL;
 
-#ifdef HAVE_NETDEVICE_MIN_MAX_MTU
-#ifdef HAVE_RHEL7_EXTENDED_MIN_MAX_MTU
-	if (new_mtu < netdev->extended->min_mtu) {
-		netdev_err(netdev, "new MTU invalid. min_mtu is %d\n",
-			   netdev->extended->min_mtu);
-		return -EINVAL;
-	} else if (new_mtu > netdev->extended->max_mtu) {
-		netdev_err(netdev, "new MTU invalid. max_mtu is %d\n",
-			   netdev->extended->max_mtu);
-		return -EINVAL;
-	}
-#else /* HAVE_RHEL7_EXTENDED_MIN_MAX_MTU */
 	if (new_mtu < netdev->min_mtu) {
 		netdev_err(netdev, "new MTU invalid. min_mtu is %d\n",
 			   netdev->min_mtu);
@@ -2654,18 +2635,6 @@ static int idpf_change_mtu(struct net_device *netdev, int new_mtu)
 			   netdev->max_mtu);
 		return -EINVAL;
 	}
-#endif /* HAVE_RHEL7_EXTENDED_MIN_MAX_MTU */
-#else /* HAVE_NETDEVICE_MIN_MAX_MTU */
-	if (new_mtu < ETH_MIN_MTU) {
-		netdev_err(netdev, "new MTU invalid. min_mtu is %d\n",
-			   ETH_MIN_MTU);
-		return -EINVAL;
-	} else if (new_mtu > vport->max_mtu) {
-		netdev_err(netdev, "new MTU invalid. max_mtu is %d\n",
-			   vport->max_mtu);
-		return -EINVAL;
-	}
-#endif /* HAVE_NETDEVICE_MIN_MAX_MTU */
 
 	if (idpf_xdp_is_prog_ena(vport) && new_mtu > IDPF_XDP_MAX_MTU) {
 		netdev_err(netdev, "New MTU value is not valid. The maximum MTU value is %d.\n",
@@ -3000,11 +2969,7 @@ static const struct net_device_ops idpf_netdev_ops_splitq = {
 	.ndo_set_rx_mode = idpf_set_rx_mode,
 	.ndo_validate_addr = eth_validate_addr,
 	.ndo_set_mac_address = idpf_set_mac,
-#ifdef HAVE_RHEL7_EXTENDED_MIN_MAX_MTU
-	.extended.ndo_change_mtu = idpf_change_mtu,
-#else
 	.ndo_change_mtu = idpf_change_mtu,
-#endif
 	.ndo_get_stats64 = idpf_get_stats64,
 	.ndo_fix_features = idpf_fix_features,
 	.ndo_set_features = idpf_set_features,
@@ -3031,11 +2996,7 @@ static const struct net_device_ops idpf_netdev_ops_singleq = {
 	.ndo_set_rx_mode = idpf_set_rx_mode,
 	.ndo_validate_addr = eth_validate_addr,
 	.ndo_set_mac_address = idpf_set_mac,
-#ifdef HAVE_RHEL7_EXTENDED_MIN_MAX_MTU
-	.extended.ndo_change_mtu = idpf_change_mtu,
-#else
 	.ndo_change_mtu = idpf_change_mtu,
-#endif
 	.ndo_get_stats64 = idpf_get_stats64,
 	.ndo_fix_features = idpf_fix_features,
 	.ndo_set_features = idpf_set_features,
