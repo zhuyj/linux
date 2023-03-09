@@ -6287,29 +6287,4 @@ static inline void _kc_dev_consume_skb_any(struct sk_buff *skb)
 #define HAVE_VM_OPS_FAULT_NO_VMA
 #endif /* 4.11.0 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,12,0))
-#if (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,7) && \
-     RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(8,0))
-/* The RHEL 7.7+ NL_SET_ERR_MSG_MOD triggers unused parameter warnings */
-#undef NL_SET_ERR_MSG_MOD
-#endif
-/* If kernel is older than 4.12 but distro is RHEL >= 7.5 || SLES > 12SP4,
- * it does have support for MIN_NAPI_ID
- */
-#if ((RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,5))) || \
-     (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(12,4,0))))
-#define HAVE_MIN_NAPI_ID
-#endif /* RHEL >= 7.5 || SLES >= 12.4 */
-#ifndef NL_SET_ERR_MSG_MOD
-#define NL_SET_ERR_MSG_MOD(extack, msg)						\
-	do {									\
-		uninitialized_var(extack);					\
-		pr_err(KBUILD_MODNAME ": " msg);				\
-	} while (0)
-#endif /* !NL_SET_ERR_MSG_MOD */
-#else /* >= 4.12 */
-#define HAVE_MIN_NAPI_ID
-#endif /* 4.12 */
-
 #endif /* _KCOMPAT_H_ */
