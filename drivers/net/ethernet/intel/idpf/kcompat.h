@@ -4892,13 +4892,8 @@ of_get_mac_address(struct device_node __always_unused *np)
 #endif /* RHEL >= 7.2 */
 #if (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,3))
 #if (RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,5))
-#define HAVE_GENEVE_RX_OFFLOAD
 #endif /* RHEL < 7.5 */
-#define HAVE_ETHTOOL_FLOW_UNION_IP6_SPEC
 #define HAVE_RHEL7_NET_DEVICE_OPS_EXT
-#if !defined(HAVE_UDP_ENC_TUNNEL) && IS_ENABLED(CONFIG_GENEVE)
-#define HAVE_UDP_ENC_TUNNEL
-#endif /* !HAVE_UDP_ENC_TUNNEL && CONFIG_GENEVE */
 #endif /* RHEL >= 7.3 */
 
 /* new hooks added to net_device_ops_extended in RHEL7.4 */
@@ -5882,97 +5877,5 @@ static inline void writeq(__u64 val, volatile void __iomem *addr)
 #include <linux/io-64-nonatomic-lo-hi.h>	/* 32-bit readq/writeq */
 #endif /* !CONFIG_64BIT */
 #endif /* 4.4.0 */
-
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0))
-/* protect against a likely backport */
-#ifndef NETIF_F_CSUM_MASK
-#define NETIF_F_CSUM_MASK NETIF_F_ALL_CSUM
-#endif /* NETIF_F_CSUM_MASK */
-#ifndef NETIF_F_SCTP_CRC
-#define NETIF_F_SCTP_CRC NETIF_F_SCTP_CSUM
-#endif /* NETIF_F_SCTP_CRC */
-#if (!(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,3)))
-#define eth_platform_get_mac_address _kc_eth_platform_get_mac_address
-int _kc_eth_platform_get_mac_address(struct device *dev __maybe_unused,
-				     u8 *mac_addr __maybe_unused);
-#endif /* !(RHEL_RELEASE >= 7.3) */
-#else /* 4.5.0 */
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(4,8,0) )
-#define HAVE_GENEVE_RX_OFFLOAD
-#if !defined(HAVE_UDP_ENC_TUNNEL) && IS_ENABLED(CONFIG_GENEVE)
-#define HAVE_UDP_ENC_TUNNEL
-#endif
-#endif /* < 4.8.0 */
-#define HAVE_NETIF_NAPI_ADD_CALLS_NAPI_HASH_ADD
-#define HAVE_NETDEV_UPPER_INFO
-#endif /* 4.5.0 */
-
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0))
-#if !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,3))
-static inline unsigned char *skb_checksum_start(const struct sk_buff *skb)
-{
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22))
-	return skb->head + skb->csum_start;
-#else /* < 2.6.22 */
-	return skb_transport_header(skb);
-#endif
-}
-#endif
-
-#if !(UBUNTU_VERSION_CODE && \
-		UBUNTU_VERSION_CODE >= UBUNTU_VERSION(4,4,0,21)) && \
-	!(RHEL_RELEASE_CODE && \
-		(RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,2))) && \
-	!(SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(12,3,0)))
-static inline void napi_consume_skb(struct sk_buff *skb,
-				    int __always_unused budget)
-{
-	dev_consume_skb_any(skb);
-}
-
-#endif /* UBUNTU 4,4,0,21, RHEL 7.2, SLES12 SP3 */
-#if !(SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(12,3,0))) && \
-	!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,4))
-static inline void csum_replace_by_diff(__sum16 *sum, __wsum diff)
-{
-	* sum = csum_fold(csum_add(diff, ~csum_unfold(*sum)));
-}
-#endif
-#if !(RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,2))) && \
-	!(SLE_VERSION_CODE && (SLE_VERSION_CODE > SLE_VERSION(12,3,0)))
-static inline void page_ref_inc(struct page *page)
-{
-	get_page(page);
-}
-#else
-#define HAVE_PAGE_COUNT_BULK_UPDATE
-#endif
-#ifndef IPV4_USER_FLOW
-#define	IPV4_USER_FLOW	0x0d	/* spec only (usr_ip4_spec) */
-#endif
-
-#if ((RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,7)) || \
-     (SLE_VERSION_CODE >= SLE_VERSION(12,2,0)))
-#define HAVE_TC_SETUP_CLSU32
-#endif
-
-#if (SLE_VERSION_CODE >= SLE_VERSION(12,2,0))
-#define HAVE_TC_SETUP_CLSFLOWER
-#endif
-
-#ifndef kstrtobool
-#define kstrtobool _kc_kstrtobool
-int _kc_kstrtobool(const char *s, bool *res);
-#endif
-
-#else /* >= 4.6.0 */
-#define HAVE_PAGE_COUNT_BULK_UPDATE
-#define HAVE_ETHTOOL_FLOW_UNION_IP6_SPEC
-#define HAVE_PTP_CROSSTIMESTAMP
-#define HAVE_TC_SETUP_CLSFLOWER
-#define HAVE_TC_SETUP_CLSU32
-#endif /* 4.6.0 */
 
 #endif /* _KCOMPAT_H_ */

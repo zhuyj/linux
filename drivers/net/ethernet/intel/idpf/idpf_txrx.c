@@ -575,12 +575,8 @@ idpf_alloc_page(struct idpf_queue *rxbufq, struct idpf_page_info *page_info)
 	page_info->page_offset = idpf_rx_offset(rxbufq);
 
 	/* initialize pagecnt_bias to claim we fully own page */
-#ifdef HAVE_PAGE_COUNT_BULK_UPDATE
 	page_ref_add(page_info->page, USHRT_MAX - 1);
 	page_info->pagecnt_bias = USHRT_MAX;
-#else
-	page_info->pagecnt_bias = 1;
-#endif /* HAVE_PAGE_COUNT_BULK_UPDATE */
 
 	return 0;
 }
@@ -3941,17 +3937,10 @@ bool idpf_rx_can_reuse_page(struct idpf_rx_buf *rx_buf)
 	 * the pagecnt_bias and page count so that we fully restock the
 	 * number of references the driver holds.
 	 */
-#ifdef HAVE_PAGE_COUNT_BULK_UPDATE
 	if (unlikely(pagecnt_bias == 1)) {
 		page_ref_add(page, USHRT_MAX - 1);
 		page_info->pagecnt_bias = USHRT_MAX;
 	}
-#else
-	if (likely(!pagecnt_bias)) {
-		get_page(page);
-		page_info->pagecnt_bias = 1;
-	}
-#endif
 
 	return true;
 }

@@ -36,11 +36,6 @@ struct idpf_vport_max_q;
 #ifdef HAVE_GRE_ENCAP_OFFLOAD
 #include <net/gre.h>
 #endif /* HAVE_GRE_ENCAP_OFFLOAD */
-#ifdef HAVE_GENEVE_RX_OFFLOAD
-#if IS_ENABLED(CONFIG_GENEVE)
-#include <net/geneve.h>
-#endif
-#endif /* HAVE_GENEVE_RX_OFFLOAD */
 #include <net/udp_tunnel.h>
 #define IDPF_DRV_NAME "idpf"
 #define IDPF_DRV_VER "0.0.704"
