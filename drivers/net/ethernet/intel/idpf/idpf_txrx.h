@@ -889,13 +889,8 @@ void idpf_rx_extra_counters(struct idpf_queue *rxq, u32 inner_prot,
 #endif /* IDPF_ADD_PROBES */
 bool idpf_rx_singleq_buf_hw_alloc_all(struct idpf_queue *rxq,
 				      u16 cleaned_count);
-#ifdef HAVE_VOID_NDO_GET_STATS64
 void idpf_get_stats64(struct net_device *netdev,
 		      struct rtnl_link_stats64 *stats);
-#else /* HAVE_VOID_NDO_GET_STATS64 */
-struct rtnl_link_stats64 *idpf_get_stats64(struct net_device *netdev,
-					   struct rtnl_link_stats64 *stats);
-#endif /* HAVE_VOID_NDO_GET_STATS64 */
 int idpf_rx_xdp(struct idpf_queue *rxq, struct idpf_queue *xdpq,
 		struct idpf_rx_buf *rx_buf, unsigned int size);
 INDIRECT_CALLABLE_DECLARE(void *idpf_prepare_xdp_tx_splitq_desc(struct idpf_queue *xdpq,

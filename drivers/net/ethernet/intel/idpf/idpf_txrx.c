@@ -39,27 +39,15 @@ static struct idpf_tx_stash *idpf_buf_lifo_pop(struct idpf_buf_lifo *stack)
  * @netdev: network interface device structure
  * @stats: main device statistics structure
  */
-#ifdef HAVE_VOID_NDO_GET_STATS64
 void idpf_get_stats64(struct net_device *netdev,
 		      struct rtnl_link_stats64 *stats)
-#else /* HAVE_VOID_NDO_GET_STATS64 */
-struct rtnl_link_stats64 *idpf_get_stats64(struct net_device *netdev,
-					   struct rtnl_link_stats64 *stats)
-#endif /* !HAVE_VOID_NDO_GET_STATS64 */
 {
 	struct idpf_vport *vport = idpf_netdev_to_vport(netdev);
 
 	if (!vport)
-#ifndef HAVE_VOID_NDO_GET_STATS64
-		return stats;
-#else
 		return;
-#endif /* HAVE_VOID_NDO_GET_STATS64 */
 
 	*stats = vport->netstats;
-#ifndef HAVE_VOID_NDO_GET_STATS64
-	return stats;
-#endif
 }
 
 /**
