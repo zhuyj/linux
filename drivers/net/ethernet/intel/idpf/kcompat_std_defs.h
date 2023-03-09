@@ -302,7 +302,6 @@
 #define HAVE_DEVLINK_REGISTER_SETS_DEV
 #define NEED_ETH_HW_ADDR_SET
 #else /* >= 5.15.0 */
-#define HAVE_ETHTOOL_COALESCE_EXTACK
 #define HAVE_NDO_ETH_IOCTL
 #define HAVE_DEVICE_IN_MDEV_PARENT_OPS
 #define HAVE_LMV1_SUPPORT
@@ -326,7 +325,6 @@
 #define NEED_NO_NETDEV_PROG_XDP_WARN_ACTION
 #else /* >=5.17.0*/
 #define HAVE_XDP_DO_FLUSH
-#define HAVE_ETHTOOL_EXTENDED_RINGPARAMS
 #endif /* 5.17.0 */
 
 /*****************************************************************************/

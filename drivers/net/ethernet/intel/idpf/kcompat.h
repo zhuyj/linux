@@ -3671,7 +3671,6 @@ static inline void skb_tx_timestamp(struct sk_buff __always_unused *skb)
 
 /*****************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37) )
-#define HAVE_NON_CONST_PCI_DRIVER_NAME
 #ifndef netif_set_real_num_tx_queues
 static inline int _kc_netif_set_real_num_tx_queues(struct net_device *dev,
 						   unsigned int txq)
@@ -4906,7 +4905,6 @@ of_get_mac_address(struct device_node __always_unused *np)
 #if (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,4))
 #define HAVE_RHEL7_NETDEV_OPS_EXT_NDO_SET_VF_VLAN
 #define HAVE_RHEL7_NETDEV_OPS_EXT_NDO_UDP_TUNNEL
-#define HAVE_UDP_ENC_RX_OFFLOAD
 #endif /* RHEL >= 7.4 */
 #else  /* RHEL >= 8.0 */
 #endif /* RHEL >= 8.0 */
@@ -5976,91 +5974,5 @@ int _kc_kstrtobool(const char *s, bool *res);
 #define HAVE_TC_SETUP_CLSFLOWER
 #define HAVE_TC_SETUP_CLSU32
 #endif /* 4.6.0 */
-
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0))
-#if ((SLE_VERSION_CODE >= SLE_VERSION(12,3,0)) ||\
-     (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,4)))
-#define HAVE_NETIF_TRANS_UPDATE
-#endif /* SLES12sp3+ || RHEL7.4+ */
-#if ((RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,3)) ||\
-     (SLE_VERSION_CODE >= SLE_VERSION(12,3,0)))
-#define HAVE_ETHTOOL_25G_BITS
-#define HAVE_ETHTOOL_50G_BITS
-#define HAVE_ETHTOOL_100G_BITS
-#endif /* RHEL7.3+ || SLES12sp3+ */
-#else /* 4.7.0 */
-#define HAVE_NETIF_TRANS_UPDATE
-#define HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
-#define HAVE_ETHTOOL_25G_BITS
-#define HAVE_ETHTOOL_50G_BITS
-#define HAVE_ETHTOOL_100G_BITS
-#define HAVE_TCF_MIRRED_REDIRECT
-#endif /* 4.7.0 */
-
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,8,0))
-#if !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,4))
-enum udp_parsable_tunnel_type {
-	UDP_TUNNEL_TYPE_VXLAN,
-	UDP_TUNNEL_TYPE_GENEVE,
-};
-struct udp_tunnel_info {
-	unsigned short type;
-	sa_family_t sa_family;
-	__be16 port;
-};
-#endif
-
-#if (UBUNTU_VERSION_CODE && UBUNTU_VERSION_CODE < UBUNTU_VERSION(4,8,0,0))
-#define tc_no_actions(_exts) true
-#define tc_for_each_action(_a, _exts) while (0)
-#endif
-#if !(SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(12,3,0))) &&\
-	!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,4))
-static inline int
-#ifdef HAVE_NON_CONST_PCI_DRIVER_NAME
-pci_request_io_regions(struct pci_dev *pdev, char *name)
-#else
-pci_request_io_regions(struct pci_dev *pdev, const char *name)
-#endif
-{
-	return pci_request_selected_regions(pdev,
-			    pci_select_bars(pdev, IORESOURCE_IO), name);
-}
-
-static inline void
-pci_release_io_regions(struct pci_dev *pdev)
-{
-	return pci_release_selected_regions(pdev,
-			    pci_select_bars(pdev, IORESOURCE_IO));
-}
-
-static inline int
-#ifdef HAVE_NON_CONST_PCI_DRIVER_NAME
-pci_request_mem_regions(struct pci_dev *pdev, char *name)
-#else
-pci_request_mem_regions(struct pci_dev *pdev, const char *name)
-#endif
-{
-	return pci_request_selected_regions(pdev,
-			    pci_select_bars(pdev, IORESOURCE_MEM), name);
-}
-
-static inline void
-pci_release_mem_regions(struct pci_dev *pdev)
-{
-	return pci_release_selected_regions(pdev,
-			    pci_select_bars(pdev, IORESOURCE_MEM));
-}
-#endif /* !SLE_VERSION(12,3,0) */
-#if ((RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,4)) ||\
-     (SLE_VERSION_CODE >= SLE_VERSION(12,3,0)))
-#define HAVE_ETHTOOL_NEW_50G_BITS
-#endif /* RHEL7.4+ || SLES12sp3+ */
-#else
-#define HAVE_UDP_ENC_RX_OFFLOAD
-#define HAVE_ETHTOOL_NEW_50G_BITS
-#endif /* 4.8.0 */
 
 #endif /* _KCOMPAT_H_ */

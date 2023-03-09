@@ -351,15 +351,10 @@ static int idpf_set_channels(struct net_device *netdev,
  * Returns current ring parameters. TX and RX rings are reported separately,
  * but the number of rings is not reported.
  */
-#ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
 static void idpf_get_ringparam(struct net_device *netdev,
 			       struct ethtool_ringparam *ring,
 			       struct kernel_ethtool_ringparam *kring,
 			       struct netlink_ext_ack *ext_ack)
-#else
-static void idpf_get_ringparam(struct net_device *netdev,
-			       struct ethtool_ringparam *ring)
-#endif /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 {
 	struct idpf_vport *vport = idpf_netdev_to_vport(netdev);
 
@@ -382,15 +377,10 @@ static void idpf_get_ringparam(struct net_device *netdev,
  * Sets ring parameters. TX and RX rings are controlled separately, but the
  * number of rings is not specified, so all rings get the same settings.
  */
-#ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
 static int idpf_set_ringparam(struct net_device *netdev,
 			      struct ethtool_ringparam *ring,
 			      struct kernel_ethtool_ringparam *kring,
 			      struct netlink_ext_ack *ext_ack)
-#else
-static int idpf_set_ringparam(struct net_device *netdev,
-			      struct ethtool_ringparam *ring)
-#endif /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 {
 	struct idpf_vport *vport = idpf_netdev_to_vport(netdev);
 	struct idpf_vport_user_config_data *config_data;
@@ -1288,15 +1278,10 @@ idpf_get_q_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec,
  *
  * Return 0 on success, and negative on failure
  */
-#ifdef HAVE_ETHTOOL_COALESCE_EXTACK
 static int
 idpf_get_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec,
 		  struct kernel_ethtool_coalesce *kec,
 		  struct netlink_ext_ack *extack)
-#else
-static int
-idpf_get_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec)
-#endif /* HAVE_ETHTOOL_COALESCE_EXTACK */
 {
 	/* Return coalesce based on queue number zero */
 	return idpf_get_q_coalesce(netdev, ec, 0);
@@ -1428,15 +1413,10 @@ idpf_set_q_coalesce(struct idpf_vport *vport, struct ethtool_coalesce *ec,
  *
  * Return 0 on success, and negative on failure
  */
-#ifdef HAVE_ETHTOOL_COALESCE_EXTACK
 static int
 idpf_set_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec,
 		  struct kernel_ethtool_coalesce *kec,
 		  struct netlink_ext_ack *extack)
-#else
-static int
-idpf_set_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec)
-#endif /* HAVE_ETHTOOL_COALESCE_EXTACK */
 {
 	struct idpf_vport *vport = idpf_netdev_to_vport(netdev);
 	int i, err = 0;

@@ -41,9 +41,7 @@ struct idpf_vport_max_q;
 #include <net/geneve.h>
 #endif
 #endif /* HAVE_GENEVE_RX_OFFLOAD */
-#ifdef HAVE_UDP_ENC_RX_OFFLOAD
 #include <net/udp_tunnel.h>
-#endif
 #define IDPF_DRV_NAME "idpf"
 #define IDPF_DRV_VER "0.0.704"
 #include "kcompat.h"
