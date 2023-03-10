@@ -5683,49 +5683,4 @@ static inline bool page_is_pfmemalloc(struct page __maybe_unused *page)
 #undef HAVE_STRUCT_PAGE_PFMEMALLOC
 #endif /* 4.1.9 */
 
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0))
-#if (!(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,2)) && \
-     !(SLE_VERSION_CODE >= SLE_VERSION(12,1,0)))
-#define ETHTOOL_RX_FLOW_SPEC_RING	0x00000000FFFFFFFFULL
-#define ETHTOOL_RX_FLOW_SPEC_RING_VF	0x000000FF00000000ULL
-#define ETHTOOL_RX_FLOW_SPEC_RING_VF_OFF 32
-static inline __u64 ethtool_get_flow_spec_ring(__u64 ring_cookie)
-{
-	return ETHTOOL_RX_FLOW_SPEC_RING & ring_cookie;
-};
-
-static inline __u64 ethtool_get_flow_spec_ring_vf(__u64 ring_cookie)
-{
-	return (ETHTOOL_RX_FLOW_SPEC_RING_VF & ring_cookie) >>
-				ETHTOOL_RX_FLOW_SPEC_RING_VF_OFF;
-};
-#endif /* ! RHEL >= 7.2 && ! SLES >= 12.1 */
-#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,4))
-#define HAVE_NDO_DFLT_BRIDGE_GETLINK_VLAN_SUPPORT
-#endif
-
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,27))
-#if (!((RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,8) && \
-	RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)) || \
-       RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,2)))
-static inline bool pci_ari_enabled(struct pci_bus *bus)
-{
-	return bus->self && bus->self->ari_enabled;
-}
-#if (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,2))
-#define HAVE_VF_STATS
-#endif /* (RHEL7.2+) */
-#endif /* !(RHEL6.8+ || RHEL7.2+) */
-#else
-static inline bool pci_ari_enabled(struct pci_bus *bus)
-{
-	return false;
-}
-#endif /* 2.6.27 */
-#else
-#define HAVE_NDO_DFLT_BRIDGE_GETLINK_VLAN_SUPPORT
-#define HAVE_VF_STATS
-#endif /* 4.2.0 */
-
 #endif /* _KCOMPAT_H_ */
