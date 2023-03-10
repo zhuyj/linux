@@ -3188,7 +3188,6 @@ static inline int _kc_pm_runtime_get_sync(struct device __always_unused *dev)
      (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,6)) && \
      (RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)))
 #define HAVE_RHEL6_NET_DEVICE_OPS_EXT
-#define HAVE_NDO_SET_FEATURES
 #endif /* RHEL >= 6.6 && RHEL < 7.0 */
 #if defined(CONFIG_FCOE) || defined(CONFIG_FCOE_MODULE)
 #ifndef HAVE_NETDEV_OPS_FCOE_ENABLE
@@ -3276,7 +3275,6 @@ static inline bool pci_is_pcie(struct pci_dev *dev)
      (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,4)) && \
      (RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)))
 #define HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT
-#define HAVE_ETHTOOL_SET_PHYS_ID
 #if (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(6,5))
 #define HAVE_ETHTOOL_GSRSSH
 #define HAVE_RHEL6_SRIOV_CONFIGURE
@@ -3724,7 +3722,6 @@ static inline void *_kc_vzalloc(unsigned long size)
 		memset(addr, 0, size);
 	return addr;
 }
-#define vzalloc(_size) _kc_vzalloc(_size)
 
 #if (!(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(5,7)) || \
      (RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,0)))
@@ -3757,140 +3754,5 @@ static inline __be16 vlan_get_protocol(const struct sk_buff *skb)
 #endif
 #endif /* > 2.4.18 */
 #endif /* < 2.6.37 */
-
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38) )
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22) )
-#define skb_checksum_start_offset(skb) skb_transport_offset(skb)
-#else /* 2.6.22 -> 2.6.37 */
-static inline int _kc_skb_checksum_start_offset(const struct sk_buff *skb)
-{
-        return skb->csum_start - skb_headroom(skb);
-}
-#define skb_checksum_start_offset(skb) _kc_skb_checksum_start_offset(skb)
-#endif /* 2.6.22 -> 2.6.37 */
-#if IS_ENABLED(CONFIG_DCB)
-#ifndef IEEE_8021QAZ_MAX_TCS
-#define IEEE_8021QAZ_MAX_TCS 8
-#endif
-#ifndef DCB_CAP_DCBX_HOST
-#define DCB_CAP_DCBX_HOST		0x01
-#endif
-#ifndef DCB_CAP_DCBX_LLD_MANAGED
-#define DCB_CAP_DCBX_LLD_MANAGED	0x02
-#endif
-#ifndef DCB_CAP_DCBX_VER_CEE
-#define DCB_CAP_DCBX_VER_CEE		0x04
-#endif
-#ifndef DCB_CAP_DCBX_VER_IEEE
-#define DCB_CAP_DCBX_VER_IEEE		0x08
-#endif
-#ifndef DCB_CAP_DCBX_STATIC
-#define DCB_CAP_DCBX_STATIC		0x10
-#endif
-#endif /* CONFIG_DCB */
-#if (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,2))
-#define CONFIG_XPS
-#endif /* RHEL_RELEASE_VERSION(6,2) */
-#endif /* < 2.6.38 */
-
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39) )
-#ifndef TC_BITMASK
-#define TC_BITMASK 15
-#endif
-#ifndef NETIF_F_RXCSUM
-#define NETIF_F_RXCSUM		BIT(29)
-#endif
-#ifndef skb_queue_reverse_walk_safe
-#define skb_queue_reverse_walk_safe(queue, skb, tmp)				\
-		for (skb = (queue)->prev, tmp = skb->prev;			\
-		     skb != (struct sk_buff *)(queue);				\
-		     skb = tmp, tmp = skb->prev)
-#endif
-
-#ifndef udp_csum
-#define udp_csum __kc_udp_csum
-static inline __wsum __kc_udp_csum(struct sk_buff *skb)
-{
-	__wsum csum = csum_partial(skb_transport_header(skb),
-				   sizeof(struct udphdr), skb->csum);
-
-	for (skb = skb_shinfo(skb)->frag_list; skb; skb = skb->next) {
-		csum = csum_add(csum, skb->csum);
-	}
-	return csum;
-}
-#endif /* udp_csum */
-#else /* < 2.6.39 */
-#if defined(CONFIG_FCOE) || defined(CONFIG_FCOE_MODULE)
-#ifndef HAVE_NETDEV_OPS_FCOE_DDP_TARGET
-#define HAVE_NETDEV_OPS_FCOE_DDP_TARGET
-#endif
-#endif /* CONFIG_FCOE || CONFIG_FCOE_MODULE */
-#ifndef HAVE_MQPRIO
-#define HAVE_MQPRIO
-#endif
-#ifndef HAVE_SETUP_TC
-#define HAVE_SETUP_TC
-#endif
-#ifdef CONFIG_DCB
-#ifndef HAVE_DCBNL_IEEE
-#define HAVE_DCBNL_IEEE
-#endif
-#endif /* CONFIG_DCB */
-#ifndef HAVE_NDO_SET_FEATURES
-#define HAVE_NDO_SET_FEATURES
-#endif
-#define HAVE_IRQ_AFFINITY_NOTIFY
-#endif /* < 2.6.39 */
-
-/*****************************************************************************/
-/* use < 2.6.40 because of a Fedora 15 kernel update where they
- * updated the kernel version to 2.6.40.x and they back-ported 3.0 features
- * like set_phys_id for ethtool.
- */
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,40) )
-#ifdef ETHTOOL_GRXRINGS
-#ifndef FLOW_EXT
-#define	FLOW_EXT	0x80000000
-union _kc_ethtool_flow_union {
-	struct ethtool_tcpip4_spec		tcp_ip4_spec;
-	struct ethtool_usrip4_spec		usr_ip4_spec;
-	__u8					hdata[60];
-};
-struct _kc_ethtool_flow_ext {
-	__be16	vlan_etype;
-	__be16	vlan_tci;
-	__be32	data[2];
-};
-struct _kc_ethtool_rx_flow_spec {
-	__u32		flow_type;
-	union _kc_ethtool_flow_union h_u;
-	struct _kc_ethtool_flow_ext h_ext;
-	union _kc_ethtool_flow_union m_u;
-	struct _kc_ethtool_flow_ext m_ext;
-	__u64		ring_cookie;
-	__u32		location;
-};
-#define ethtool_rx_flow_spec _kc_ethtool_rx_flow_spec
-#endif /* FLOW_EXT */
-#endif
-
-#define pci_disable_link_state_locked pci_disable_link_state
-
-#ifndef PCI_LTR_VALUE_MASK
-#define  PCI_LTR_VALUE_MASK	0x000003ff
-#endif
-#ifndef PCI_LTR_SCALE_MASK
-#define  PCI_LTR_SCALE_MASK	0x00001c00
-#endif
-#ifndef PCI_LTR_SCALE_SHIFT
-#define  PCI_LTR_SCALE_SHIFT	10
-#endif
-
-#else /* < 2.6.40 */
-#define HAVE_ETHTOOL_SET_PHYS_ID
-#endif /* < 2.6.40 */
 
 #endif /* _KCOMPAT_H_ */
