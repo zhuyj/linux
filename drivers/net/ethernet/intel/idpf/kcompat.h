@@ -5565,18 +5565,4 @@ static inline struct sk_buff *__kc_napi_alloc_skb(struct napi_struct *napi, unsi
 #define HAVE_NDO_BRIDGE_SET_DEL_LINK_FLAGS
 #endif /* 3.20.0 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(4,0,0) )
-/* Definition for CONFIG_OF was introduced earlier */
-#if !defined(CONFIG_OF) && \
-    !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,2))
-static inline struct device_node *
-pci_device_to_OF_node(const struct pci_dev __always_unused *pdev) { return NULL; }
-#else /* !CONFIG_OF && RHEL < 7.3 */
-#define HAVE_DDP_PROFILE_UPLOAD_SUPPORT
-#endif /* !CONFIG_OF && RHEL < 7.3 */
-#else /* < 4.0 */
-#define HAVE_DDP_PROFILE_UPLOAD_SUPPORT
-#endif /* < 4.0 */
-
 #endif /* _KCOMPAT_H_ */
