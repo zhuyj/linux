@@ -992,7 +992,6 @@ int idpf_recv_ver_msg(struct idpf_adapter *adapter)
 	return err;
 }
 
-#ifdef HAVE_NDO_FEATURES_CHECK
 /**
  * idpf_get_max_tx_hdr_size -- get the size of tx header
  * @adapter: Driver specific private structure
@@ -1002,7 +1001,6 @@ u16 idpf_get_max_tx_hdr_size(struct idpf_adapter *adapter)
 	return le16_to_cpu(adapter->caps.max_tx_hdr_size);
 }
 
-#endif /* HAVE_NDO_FEATURES_CHECK */
 /**
  * idpf_send_get_caps_msg - Send virtchnl get capabilities message
  * @adapter: Driver specific private structure

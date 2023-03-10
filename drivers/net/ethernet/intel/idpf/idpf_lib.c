@@ -2646,7 +2646,6 @@ static int idpf_change_mtu(struct net_device *netdev, int new_mtu)
 	return idpf_initiate_soft_reset(vport, __IDPF_SR_MTU_CHANGE);
 }
 
-#ifdef HAVE_NDO_FEATURES_CHECK
 /**
  * idpf_features_check - Validate packet conforms to limits
  * @skb: skb buffer
@@ -2710,7 +2709,6 @@ out_err:
 	return features & ~(NETIF_F_CSUM_MASK | NETIF_F_GSO_MASK);
 }
 
-#endif /* HAVE_NDO_FEATURES_CHECK */
 /**
  * idpf_change_tx_sch_mode - reset queue context with appropriate
  * tx scheduling mode
@@ -2963,9 +2961,7 @@ static const struct net_device_ops idpf_netdev_ops_splitq = {
 	.ndo_open = idpf_open,
 	.ndo_stop = idpf_stop,
 	.ndo_start_xmit = idpf_tx_splitq_start,
-#ifdef HAVE_NDO_FEATURES_CHECK
 	.ndo_features_check = idpf_features_check,
-#endif /* HAVE_NDO_FEATURES_CHECK */
 	.ndo_set_rx_mode = idpf_set_rx_mode,
 	.ndo_validate_addr = eth_validate_addr,
 	.ndo_set_mac_address = idpf_set_mac,
@@ -2990,9 +2986,7 @@ static const struct net_device_ops idpf_netdev_ops_singleq = {
 	.ndo_open = idpf_open,
 	.ndo_stop = idpf_stop,
 	.ndo_start_xmit = idpf_tx_singleq_start,
-#ifdef HAVE_NDO_FEATURES_CHECK
 	.ndo_features_check = idpf_features_check,
-#endif /* HAVE_NDO_FEATURES_CHECK */
 	.ndo_set_rx_mode = idpf_set_rx_mode,
 	.ndo_validate_addr = eth_validate_addr,
 	.ndo_set_mac_address = idpf_set_mac,

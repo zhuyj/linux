@@ -5409,17 +5409,4 @@ unsigned int __kc_eth_get_headlen(unsigned char *data, unsigned int max_len);
 #define HAVE_SKB_INNER_PROTOCOL_TYPE
 #endif /* 3.18.0 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,18,4) )
-#else
-#define HAVE_NDO_FEATURES_CHECK
-#endif /* 3.18.4 */
-
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,18,13) )
-#ifndef WRITE_ONCE
-#define WRITE_ONCE(x, val) ({ ACCESS_ONCE(x) = (val); })
-#endif
-#endif /* 3.18.13 */
-
 #endif /* _KCOMPAT_H_ */

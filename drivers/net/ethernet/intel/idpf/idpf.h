@@ -961,9 +961,7 @@ int idpf_msec_wait_for_event(struct idpf_adapter *adapter,
 			     enum idpf_vport_vc_state state,
 			     enum idpf_vport_vc_state err_check,
 			     int timeout);
-#ifdef HAVE_NDO_FEATURES_CHECK
 u16 idpf_get_max_tx_hdr_size(struct idpf_adapter *adapter);
-#endif /* HAVE_NDO_FEATURES_CHECK */
 int idpf_send_ver_msg(struct idpf_adapter *adapter);
 int idpf_recv_ver_msg(struct idpf_adapter *adapter);
 int idpf_send_get_caps_msg(struct idpf_adapter *adapter);
