@@ -1613,20 +1613,4 @@ static inline struct device *pci_dev_to_dev(struct pci_dev *pdev)
 }
 #endif /* <= 2.5.0 */
 
-/*****************************************************************************/
-/* 2.5.28 => 2.4.23 */
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,5,28) )
-
-#include <linux/tqueue.h>
-#define work_struct tq_struct
-#undef INIT_WORK
-#define INIT_WORK(a,b) INIT_TQUEUE(a,(void (*)(void *))b,a)
-#undef container_of
-#define container_of list_entry
-#define schedule_work schedule_task
-#define flush_scheduled_work flush_scheduled_tasks
-#define cancel_work_sync(x) flush_scheduled_work()
-
-#endif /* 2.5.28 => 2.4.17 */
-
 #endif /* _KCOMPAT_H_ */
