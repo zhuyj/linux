@@ -3278,7 +3278,6 @@ static inline bool pci_is_pcie(struct pci_dev *dev)
 #define HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT
 #define HAVE_ETHTOOL_GRXFHINDIR_SIZE
 #define HAVE_ETHTOOL_SET_PHYS_ID
-#define HAVE_ETHTOOL_GET_TS_INFO
 #if (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(6,5))
 #define HAVE_ETHTOOL_GSRSSH
 #define HAVE_RHEL6_SRIOV_CONFIGURE
@@ -4200,94 +4199,5 @@ void _kc_skb_add_rx_frag(struct sk_buff * skb, int i, struct page *page,
 #endif /* CONFIG_PTP_1588_CLOCK */
 #endif /* !NO_PTP_SUPPORT */
 #endif /* >= 3.0.0 || RHEL_RELEASE > 6.4 */
-
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) )
-
-#ifndef SIZE_MAX
-#define SIZE_MAX (~(size_t)0)
-#endif
-
-#ifndef BITS_PER_LONG_LONG
-#define BITS_PER_LONG_LONG 64
-#endif
-
-#ifndef ether_addr_equal
-static inline bool __kc_ether_addr_equal(const u8 *addr1, const u8 *addr2)
-{
-	return !compare_ether_addr(addr1, addr2);
-}
-#define ether_addr_equal(_addr1, _addr2) __kc_ether_addr_equal((_addr1),(_addr2))
-#endif
-
-/* Definitions for !CONFIG_OF_NET are introduced in 3.10 */
-#ifdef CONFIG_OF_NET
-static inline int of_get_phy_mode(struct device_node __always_unused *np)
-{
-	return -ENODEV;
-}
-
-static inline const void *
-of_get_mac_address(struct device_node __always_unused *np)
-{
-	return NULL;
-}
-#endif
-#else
-#include <linux/of_net.h>
-#define HAVE_FDB_OPS
-#define HAVE_ETHTOOL_GET_TS_INFO
-#endif /* < 3.5.0 */
-
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,6,0) )
-#define PCI_EXP_LNKCAP2		44	/* Link Capability 2 */
-
-#ifndef MDIO_EEE_100TX
-#define MDIO_EEE_100TX		0x0002	/* 100TX EEE cap */
-#endif
-#ifndef MDIO_EEE_1000T
-#define MDIO_EEE_1000T		0x0004	/* 1000T EEE cap */
-#endif
-#ifndef MDIO_EEE_10GT
-#define MDIO_EEE_10GT		0x0008	/* 10GT EEE cap */
-#endif
-#ifndef MDIO_EEE_1000KX
-#define MDIO_EEE_1000KX		0x0010	/* 1000KX EEE cap */
-#endif
-#ifndef MDIO_EEE_10GKX4
-#define MDIO_EEE_10GKX4		0x0020	/* 10G KX4 EEE cap */
-#endif
-#ifndef MDIO_EEE_10GKR
-#define MDIO_EEE_10GKR		0x0040	/* 10G KR EEE cap */
-#endif
-
-#ifndef __GFP_MEMALLOC
-#define __GFP_MEMALLOC 0
-#endif
-
-#ifndef eth_broadcast_addr
-#define eth_broadcast_addr _kc_eth_broadcast_addr
-static inline void _kc_eth_broadcast_addr(u8 *addr)
-{
-	memset(addr, 0xff, ETH_ALEN);
-}
-#endif
-
-#ifndef eth_random_addr
-#define eth_random_addr _kc_eth_random_addr
-static inline void _kc_eth_random_addr(u8 *addr)
-{
-        get_random_bytes(addr, ETH_ALEN);
-        addr[0] &= 0xfe; /* clear multicast */
-        addr[0] |= 0x02; /* set local assignment */
-}
-#endif /* eth_random_addr */
-
-#ifndef DMA_ATTR_SKIP_CPU_SYNC
-#define DMA_ATTR_SKIP_CPU_SYNC 0
-#endif
-#else /* < 3.6.0 */
-#endif /* < 3.6.0 */
 
 #endif /* _KCOMPAT_H_ */
