@@ -2430,38 +2430,4 @@ static inline __wsum csum_unfold(__sum16 n)
 #define HAVE_DEVICE_NUMA_NODE
 #endif /* < 2.6.20 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21) )
-#define to_net_dev(class) container_of(class, struct net_device, class_dev)
-#define NETDEV_CLASS_DEV
-#if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(5,5)))
-#define vlan_group_get_device(vg, id) (vg->vlan_devices[id])
-#define vlan_group_set_device(vg, id, dev)		\
-	do {						\
-		if (vg) vg->vlan_devices[id] = dev;	\
-	} while (0)
-#endif /* !(RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(5,5)) */
-#define pci_channel_offline(pdev) (pdev->error_state && \
-	pdev->error_state != pci_channel_io_normal)
-#define pci_request_selected_regions(pdev, bars, name) \
-        pci_request_regions(pdev, name)
-#define pci_release_selected_regions(pdev, bars) pci_release_regions(pdev);
-
-#ifndef __aligned
-#define __aligned(x)			__attribute__((aligned(x)))
-#endif
-
-struct pci_dev *_kc_netdev_to_pdev(struct net_device *netdev);
-#define netdev_to_dev(netdev)	\
-	pci_dev_to_dev(_kc_netdev_to_pdev(netdev))
-#define devm_kzalloc(dev, size, flags) kzalloc(size, flags)
-#define devm_kfree(dev, p) kfree(p)
-#else /* 2.6.21 */
-static inline struct device *netdev_to_dev(struct net_device *netdev)
-{
-	return &netdev->dev;
-}
-
-#endif /* < 2.6.21 */
-
 #endif /* _KCOMPAT_H_ */
