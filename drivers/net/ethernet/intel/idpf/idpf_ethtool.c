@@ -1554,14 +1554,12 @@ static const struct ethtool_ops idpf_ethtool_ops = {
 	.get_rxnfc		= idpf_get_rxnfc,
 	.set_rxnfc		= idpf_set_rxnfc,
 #endif /* ETHTOOL_GRXRINGS */
-#ifndef HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT
 #if defined(ETHTOOL_GRSSH) && defined(ETHTOOL_SRSSH)
 	.get_rxfh_key_size	= idpf_get_rxfh_key_size,
 	.get_rxfh_indir_size	= idpf_get_rxfh_indir_size,
 	.get_rxfh		= idpf_get_rxfh,
 	.set_rxfh		= idpf_set_rxfh,
 #endif /* ETHTOOL_GRSSH && ETHTOOL_SRSSH*/
-#endif /* HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT */
 	.get_channels		= idpf_get_channels,
 	.set_channels		= idpf_set_channels,
 	.get_ringparam		= idpf_get_ringparam,
