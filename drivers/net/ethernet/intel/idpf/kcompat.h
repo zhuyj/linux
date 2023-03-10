@@ -1163,37 +1163,4 @@ int _kc_is_valid_ether_addr(u8 *addr);
 #define EXPANSION_ENABLENPAGE   0x0004  /* This enables npage words    */
 #endif
 
-/*****************************************************************************/
-/* 2.4.6 => 2.4.3 */
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,4,6) )
-
-#ifndef pci_set_power_state
-#define pci_set_power_state _kc_pci_set_power_state
-int _kc_pci_set_power_state(struct pci_dev *dev, int state);
-#endif
-
-#ifndef pci_enable_wake
-#define pci_enable_wake _kc_pci_enable_wake
-int _kc_pci_enable_wake(struct pci_dev *pdev, u32 state, int enable);
-#endif
-
-#ifndef pci_disable_device
-#define pci_disable_device _kc_pci_disable_device
-void _kc_pci_disable_device(struct pci_dev *pdev);
-#endif
-
-/* PCI PM entry point syntax changed, so don't support suspend/resume */
-#undef CONFIG_PM
-
-#endif /* 2.4.6 => 2.4.3 */
-
-#ifndef HAVE_PCI_SET_MWI
-#define pci_set_mwi(X) pci_write_config_word(X, \
-			       PCI_COMMAND, adapter->hw.bus.pci_cmd_word | \
-			       PCI_COMMAND_INVALIDATE);
-#define pci_clear_mwi(X) pci_write_config_word(X, \
-			       PCI_COMMAND, adapter->hw.bus.pci_cmd_word & \
-			       ~PCI_COMMAND_INVALIDATE);
-#endif
-
 #endif /* _KCOMPAT_H_ */
