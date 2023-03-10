@@ -744,11 +744,7 @@ static void idpf_rx_singleq_csum(struct idpf_queue *rxq, struct sk_buff *skb,
 	 * we are indicating we validated the inner checksum.
 	 */
 	if (decoded.tunnel_type >= IDPF_RX_PTYPE_TUNNEL_IP_GRENAT)
-#ifdef HAVE_SKBUFF_CSUM_LEVEL
 		skb->csum_level = 1;
-#else
-		skb->encapsulation = 1;
-#endif
 
 	/* Only report checksum unnecessary for ICMP, TCP, UDP, or SCTP */
 	switch (decoded.inner_prot) {
