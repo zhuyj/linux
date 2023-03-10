@@ -3893,36 +3893,4 @@ struct _kc_ethtool_rx_flow_spec {
 #define HAVE_ETHTOOL_SET_PHYS_ID
 #endif /* < 2.6.40 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,0,0) )
-#define USE_LEGACY_PM_SUPPORT
-#ifndef kfree_rcu
-#define kfree_rcu(_ptr, _rcu_head) kfree(_ptr)
-#endif /* kfree_rcu */
-#ifndef kstrtol_from_user
-#define kstrtol_from_user(s, c, b, r) _kc_kstrtol_from_user(s, c, b, r)
-static inline int _kc_kstrtol_from_user(const char __user *s, size_t count,
-					unsigned int base, long *res)
-{
-	/* sign, base 2 representation, newline, terminator */
-	char buf[1 + sizeof(long) * 8 + 1 + 1];
-
-	count = min(count, sizeof(buf) - 1);
-	if (copy_from_user(buf, s, count))
-		return -EFAULT;
-	buf[count] = '\0';
-	return strict_strtol(buf, base, res);
-}
-#endif
-
-#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,0) || \
-     RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(5,7)))
-/* 20000base_blah_full Supported and Advertised Registers */
-#define SUPPORTED_20000baseMLD2_Full	BIT(21)
-#define SUPPORTED_20000baseKR2_Full	BIT(22)
-#define ADVERTISED_20000baseMLD2_Full	BIT(21)
-#define ADVERTISED_20000baseKR2_Full	BIT(22)
-#endif /* RHEL_RELEASE_CODE */
-#endif /* < 3.0.0 */
-
 #endif /* _KCOMPAT_H_ */
