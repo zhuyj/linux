@@ -1798,18 +1798,4 @@ static inline void _kc_bitmap_zero(unsigned long *dst, int nbits)
 
 #endif /* < 2.6.6 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7) )
-#undef if_mii
-#define if_mii _kc_if_mii
-static inline struct mii_ioctl_data *_kc_if_mii(struct ifreq *rq)
-{
-	return (struct mii_ioctl_data *) &rq->ifr_ifru;
-}
-
-#ifndef __force
-#define __force
-#endif
-#endif /* < 2.6.7 */
-
 #endif /* _KCOMPAT_H_ */
