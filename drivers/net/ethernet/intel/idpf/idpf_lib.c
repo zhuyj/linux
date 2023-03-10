@@ -816,7 +816,6 @@ static int idpf_cfg_netdev(struct idpf_vport *vport)
 	 */
 	if (idpf_is_cap_ena_all(vport->adapter, IDPF_SEG_CAPS,
 				IDPF_CAP_TUNNEL)) {
-#ifdef HAVE_ENCAP_TSO_OFFLOAD
 		offloads |= NETIF_F_GSO_UDP_TUNNEL	|
 #ifdef HAVE_GRE_ENCAP_OFFLOAD
 			    NETIF_F_GSO_GRE		|
@@ -852,7 +851,6 @@ static int idpf_cfg_netdev(struct idpf_vport *vport)
 		netdev->gso_partial_features |= NETIF_F_GSO_GRE_CSUM;
 		offloads |= NETIF_F_TSO_MANGLEID;
 #endif /* !NETIF_F_GSO_PARTIAL */
-#endif /* HAVE_ENCAP_TSO_OFFLOAD */
 	}
 #endif /* HAVE_ENCAP_CSUM_OFFLOAD */
 	if (idpf_is_cap_ena(adapter, IDPF_OTHER_CAPS, VIRTCHNL2_CAP_LOOPBACK))
