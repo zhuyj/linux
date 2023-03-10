@@ -2179,19 +2179,4 @@ static inline unsigned _kc_compare_ether_addr(const u8 *addr1, const u8 *addr2)
 #endif /* SLE_VERSION(10,4,0) */
 #endif /* < 2.6.16 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17) )
-#ifndef dev_notice
-#define dev_notice(dev, fmt, args...)            \
-	dev_printk(KERN_NOTICE, dev, fmt, ## args)
-#endif
-
-#ifndef first_online_node
-#define first_online_node 0
-#endif
-#ifndef NET_SKB_PAD
-#define NET_SKB_PAD 16
-#endif
-#endif /* < 2.6.17 */
-
 #endif /* _KCOMPAT_H_ */
