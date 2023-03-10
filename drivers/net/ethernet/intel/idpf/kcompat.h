@@ -1951,27 +1951,4 @@ static inline void *_kc_skb_header_pointer(const struct sk_buff *skb,
 #endif
 #endif /* < 2.6.9 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,10) )
-#ifdef module_param_array_named
-#undef module_param_array_named
-#define module_param_array_named(name, array, type, nump, perm)          \
-	static struct kparam_array __param_arr_##name                    \
-	= { ARRAY_SIZE(array), nump, param_set_##type, param_get_##type, \
-	    sizeof(array[0]), array };                                   \
-	module_param_call(name, param_array_set, param_array_get,        \
-			  &__param_arr_##name, perm)
-#endif /* module_param_array_named */
-/*
- * num_online is broken for all < 2.6.10 kernels.  This is needed to support
- * Node module parameter of ixgbe.
- */
-#undef num_online_nodes
-#define num_online_nodes(n) 1
-extern DECLARE_BITMAP(_kcompat_node_online_map, MAX_NUMNODES);
-#undef node_online_map
-#define node_online_map _kcompat_node_online_map
-#define pci_get_class pci_find_class
-#endif /* < 2.6.10 */
-
 #endif /* _KCOMPAT_H_ */
