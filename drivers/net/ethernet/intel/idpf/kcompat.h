@@ -3276,7 +3276,6 @@ static inline bool pci_is_pcie(struct pci_dev *dev)
      (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,4)) && \
      (RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)))
 #define HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT
-#define HAVE_ETHTOOL_GRXFHINDIR_SIZE
 #define HAVE_ETHTOOL_SET_PHYS_ID
 #if (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(6,5))
 #define HAVE_ETHTOOL_GSRSSH
@@ -4058,95 +4057,5 @@ static inline void __kc_skb_frag_unref(skb_frag_t *frag)
 #define HAVE_IOMMU_PRESENT
 #define HAVE_PM_QOS_REQUEST_LIST_NEW
 #endif /* < 3.2.0 */
-
-#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,2))
-#undef ixgbe_get_netdev_tc_txq
-#define ixgbe_get_netdev_tc_txq(dev, tc) (&netdev_extended(dev)->qos_data.tc_to_txq[tc])
-#endif
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0) )
-/* NOTE: the order of parameters to _kc_alloc_workqueue() is different than
- * alloc_workqueue() to avoid compiler warning from -Wvarargs
- */
-static inline struct workqueue_struct * __attribute__ ((format(printf, 3, 4)))
-_kc_alloc_workqueue(__maybe_unused int flags, __maybe_unused int max_active,
-		    const char *fmt, ...)
-{
-	struct workqueue_struct *wq;
-	va_list args, temp;
-	unsigned int len;
-	char *p;
-
-	va_start(args, fmt);
-	va_copy(temp, args);
-	len = vsnprintf(NULL, 0, fmt, temp);
-	va_end(temp);
-
-	p = kmalloc(len + 1, GFP_KERNEL);
-	if (!p) {
-		va_end(args);
-		return NULL;
-	}
-
-	vsnprintf(p, len + 1, fmt, args);
-	va_end(args);
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36) )
-	wq = create_workqueue(p);
-#else
-	wq = alloc_workqueue(p, flags, max_active);
-#endif
-	kfree(p);
-
-	return wq;
-}
-#ifdef alloc_workqueue
-#undef alloc_workqueue
-#endif
-#define alloc_workqueue(fmt, flags, max_active, args...) \
-	_kc_alloc_workqueue(flags, max_active, fmt, ##args)
-
-#if !(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,5))
-typedef u32 netdev_features_t;
-#endif
-#undef PCI_EXP_TYPE_RC_EC
-#define  PCI_EXP_TYPE_RC_EC	0xa	/* Root Complex Event Collector */
-#ifndef CONFIG_BQL
-#define netdev_tx_completed_queue(_q, _p, _b) do {} while (0)
-#define netdev_completed_queue(_n, _p, _b) do {} while (0)
-#define netdev_tx_sent_queue(_q, _b) do {} while (0)
-#define netdev_sent_queue(_n, _b) do {} while (0)
-#define netdev_tx_reset_queue(_q) do {} while (0)
-#define netdev_reset_queue(_n) do {} while (0)
-#endif
-#if (SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(11,3,0))
-#define HAVE_ETHTOOL_GRXFHINDIR_SIZE
-#endif /* SLE_VERSION(11,3,0) */
-#define netif_xmit_stopped(_q) netif_tx_queue_stopped(_q)
-#if !(SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(11,4,0))
-static inline int __kc_ipv6_skip_exthdr(const struct sk_buff *skb, int start,
-					u8 *nexthdrp,
-					__be16 __always_unused *frag_offp)
-{
-	return ipv6_skip_exthdr(skb, start, nexthdrp);
-}
-#undef ipv6_skip_exthdr
-#define ipv6_skip_exthdr(a,b,c,d) __kc_ipv6_skip_exthdr((a), (b), (c), (d))
-#endif /* !SLES11sp4 or greater */
-
-#if (!(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,4)) && \
-     !(SLE_VERSION_CODE >= SLE_VERSION(11,3,0)))
-static inline u32 ethtool_rxfh_indir_default(u32 index, u32 n_rx_rings)
-{
-	return index % n_rx_rings;
-}
-#endif
-
-#else /* ! < 3.3.0 */
-#define HAVE_ETHTOOL_GRXFHINDIR_SIZE
-#define HAVE_INT_NDO_VLAN_RX_ADD_VID
-#ifdef ETHTOOL_SRXNTUPLE
-#undef ETHTOOL_SRXNTUPLE
-#endif
-#endif /* < 3.3.0 */
 
 #endif /* _KCOMPAT_H_ */
