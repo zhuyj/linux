@@ -2783,30 +2783,4 @@ static inline int _kc_strict_strtol(const char *buf, unsigned int base, long *re
 
 #endif /* < 2.6.25 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26) )
-#ifndef clamp_t
-#define clamp_t(type, val, min, max) ({		\
-	type __val = (val);			\
-	type __min = (min);			\
-	type __max = (max);			\
-	__val = __val < __min ? __min : __val;	\
-	__val > __max ? __max : __val; })
-#endif /* clamp_t */
-#undef kzalloc_node
-#define kzalloc_node(_size, _flags, _node) kzalloc(_size, _flags)
-
-void _kc_pci_disable_link_state(struct pci_dev *dev, int state);
-#define pci_disable_link_state(p, s) _kc_pci_disable_link_state(p, s)
-#else /* < 2.6.26 */
-#define NETDEV_CAN_SET_GSO_MAX_SIZE
-#ifdef HAVE_PCI_ASPM_H
-#include <linux/pci-aspm.h>
-#endif
-#define HAVE_NETDEV_VLAN_FEATURES
-#ifndef PCI_EXP_LNKCAP_ASPMS
-#define PCI_EXP_LNKCAP_ASPMS 0x00000c00 /* ASPM Support */
-#endif /* PCI_EXP_LNKCAP_ASPMS */
-#endif /* < 2.6.26 */
-
 #endif /* _KCOMPAT_H_ */
