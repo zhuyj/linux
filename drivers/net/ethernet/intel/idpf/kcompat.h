@@ -5545,24 +5545,4 @@ static inline struct sk_buff *__kc_napi_alloc_skb(struct napi_struct *napi, unsi
 #define NDO_DFLT_BRIDGE_GETLINK_HAS_BRFLAGS
 #endif /* 3.19.0 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,20,0) )
-/* vlan_tx_xx functions got renamed to skb_vlan */
-#ifndef skb_vlan_tag_get
-#define skb_vlan_tag_get vlan_tx_tag_get
-#endif
-#ifndef skb_vlan_tag_present
-#define skb_vlan_tag_present vlan_tx_tag_present
-#endif
-#if RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,1))
-#define HAVE_INCLUDE_LINUX_TIMECOUNTER_H
-#endif
-#if RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,2))
-#define HAVE_NDO_BRIDGE_SET_DEL_LINK_FLAGS
-#endif
-#else
-#define HAVE_INCLUDE_LINUX_TIMECOUNTER_H
-#define HAVE_NDO_BRIDGE_SET_DEL_LINK_FLAGS
-#endif /* 3.20.0 */
-
 #endif /* _KCOMPAT_H_ */
