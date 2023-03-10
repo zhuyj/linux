@@ -13,13 +13,8 @@
  *
  * Returns Success if the command is supported.
  */
-#ifdef HAVE_ETHTOOL_GET_RXNFC_VOID_RULE_LOCS
-static int idpf_get_rxnfc(struct net_device *netdev, struct ethtool_rxnfc *cmd,
-			  void __always_unused *rule_locs)
-#else
 static int idpf_get_rxnfc(struct net_device *netdev, struct ethtool_rxnfc *cmd,
 			  u32 __always_unused *rule_locs)
-#endif
 {
 	struct idpf_vport *vport = idpf_netdev_to_vport(netdev);
 	int ret = -EOPNOTSUPP;
