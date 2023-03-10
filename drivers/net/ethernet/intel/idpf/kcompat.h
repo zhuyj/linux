@@ -4916,9 +4916,6 @@ of_get_mac_address(struct device_node __always_unused *np)
      (SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(11,4,0)))
 #define HAVE_NDO_SET_VF_LINK_STATE
 #endif
-#if RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,2))
-#define HAVE_NDO_SELECT_QUEUE_ACCEL_FALLBACK
-#endif
 #else /* >= 3.11.0 */
 #define HAVE_NDO_SET_VF_LINK_STATE
 #define HAVE_SKB_INNER_PROTOCOL
@@ -4939,15 +4936,6 @@ int _kc_pci_wait_for_pending_transaction(struct pci_dev *dev);
 #endif /* <RHEL6.7 */
 
 #else /* >= 3.12.0 */
-#if ( SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(12,0,0))
-#define HAVE_NDO_SELECT_QUEUE_ACCEL_FALLBACK
-#endif
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(4,8,0) )
-#define HAVE_VXLAN_RX_OFFLOAD
-#if !defined(HAVE_UDP_ENC_TUNNEL) && IS_ENABLED(CONFIG_VXLAN)
-#define HAVE_UDP_ENC_TUNNEL
-#endif
-#endif /* < 4.8.0 */
 #define HAVE_NDO_GET_PHYS_PORT_ID
 #define HAVE_NETIF_SET_XPS_QUEUE_CONST_MASK
 #endif /* >= 3.12.0 */
@@ -4999,181 +4987,10 @@ bool _kc_pci_device_is_present(struct pci_dev *pdev);
 #else /* >= 3.13.0 */
 #define HAVE_VXLAN_CHECKS
 #if (UBUNTU_VERSION_CODE && UBUNTU_VERSION_CODE >= UBUNTU_VERSION(3,13,0,24))
-#define HAVE_NDO_SELECT_QUEUE_ACCEL_FALLBACK
 #else
 #define HAVE_NDO_SELECT_QUEUE_ACCEL
 #endif
 #define HAVE_HWMON_DEVICE_REGISTER_WITH_GROUPS
 #endif
-
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0) )
-
-#ifndef U16_MAX
-#define U16_MAX ((u16)~0U)
-#endif
-
-#ifndef U32_MAX
-#define U32_MAX ((u32)~0U)
-#endif
-
-#ifndef U64_MAX
-#define U64_MAX ((u64)~0ULL)
-#endif
-
-#if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,2)))
-#define dev_consume_skb_any(x) dev_kfree_skb_any(x)
-#define dev_consume_skb_irq(x) dev_kfree_skb_irq(x)
-#endif
-
-#if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,0)) && \
-     !(SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(12,0,0)))
-
-/* it isn't expected that this would be a #define unless we made it so */
-#ifndef skb_set_hash
-
-#define PKT_HASH_TYPE_NONE	0
-#define PKT_HASH_TYPE_L2	1
-#define PKT_HASH_TYPE_L3	2
-#define PKT_HASH_TYPE_L4	3
-
-enum _kc_pkt_hash_types {
-	_KC_PKT_HASH_TYPE_NONE = PKT_HASH_TYPE_NONE,
-	_KC_PKT_HASH_TYPE_L2 = PKT_HASH_TYPE_L2,
-	_KC_PKT_HASH_TYPE_L3 = PKT_HASH_TYPE_L3,
-	_KC_PKT_HASH_TYPE_L4 = PKT_HASH_TYPE_L4,
-};
-#define pkt_hash_types         _kc_pkt_hash_types
-
-#define skb_set_hash __kc_skb_set_hash
-static inline void __kc_skb_set_hash(struct sk_buff __maybe_unused *skb,
-				     u32 __maybe_unused hash,
-				     int __maybe_unused type)
-{
-#ifdef HAVE_SKB_L4_RXHASH
-	skb->l4_rxhash = (type == PKT_HASH_TYPE_L4);
-#endif
-#ifdef NETIF_F_RXHASH
-	skb->rxhash = hash;
-#endif
-}
-#endif /* !skb_set_hash */
-
-#else	/* RHEL_RELEASE_CODE >= 7.0 || SLE_VERSION_CODE >= 12.0 */
-
-#if ((RHEL_RELEASE_CODE && RHEL_RELEASE_CODE <= RHEL_RELEASE_VERSION(7,0)) ||\
-     (SLE_VERSION_CODE && SLE_VERSION_CODE <= SLE_VERSION(12,1,0)))
-/* GPLv2 code taken from 5.10-rc2 kernel source include/linux/pci.h, Copyright
- * original authors.
- */
-static inline int pci_enable_msix_exact(struct pci_dev *dev,
-					struct msix_entry *entries, int nvec)
-{
-	int rc = pci_enable_msix_range(dev, entries, nvec, nvec);
-	if (rc < 0)
-		return rc;
-	return 0;
-}
-#endif /* <=EL7.0 || <=SLES 12.1 */
-#if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,5)))
-#ifndef HAVE_VXLAN_RX_OFFLOAD
-#define HAVE_VXLAN_RX_OFFLOAD
-#endif /* HAVE_VXLAN_RX_OFFLOAD */
-#endif
-
-#if !defined(HAVE_UDP_ENC_TUNNEL) && IS_ENABLED(CONFIG_VXLAN)
-#define HAVE_UDP_ENC_TUNNEL
-#endif
-
-#ifndef HAVE_VXLAN_CHECKS
-#define HAVE_VXLAN_CHECKS
-#endif /* HAVE_VXLAN_CHECKS */
-#endif /* !(RHEL_RELEASE_CODE >= 7.0 && SLE_VERSION_CODE >= 12.0) */
-
-#if ((RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,3)) ||\
-     (SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(12,0,0)))
-#define HAVE_NDO_DFWD_OPS
-#endif
-
-#ifndef pci_enable_msix_range
-int __kc_pci_enable_msix_range(struct pci_dev *dev, struct msix_entry *entries,
-			       int minvec, int maxvec);
-#define pci_enable_msix_range __kc_pci_enable_msix_range
-#endif
-
-#ifndef ether_addr_copy
-#define ether_addr_copy __kc_ether_addr_copy
-static inline void __kc_ether_addr_copy(u8 *dst, const u8 *src)
-{
-#if defined(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS)
-	*(u32 *)dst = *(const u32 *)src;
-	*(u16 *)(dst + 4) = *(const u16 *)(src + 4);
-#else
-	u16 *a = (u16 *)dst;
-	const u16 *b = (const u16 *)src;
-
-	a[0] = b[0];
-	a[1] = b[1];
-	a[2] = b[2];
-#endif
-}
-#endif /* ether_addr_copy */
-int __kc_ipv6_find_hdr(const struct sk_buff *skb, unsigned int *offset,
-		       int target, unsigned short *fragoff, int *flags);
-#define ipv6_find_hdr(a, b, c, d, e) __kc_ipv6_find_hdr((a), (b), (c), (d), (e))
-
-#ifndef OPTIMIZE_HIDE_VAR
-#ifdef __GNUC__
-#define OPTIMIZER_HIDE_VAR(var) __asm__ ("" : "=r" (var) : "0" (var))
-#else
-#include <linux/barrier.h>
-#define OPTIMIZE_HIDE_VAR(var)	barrier()
-#endif
-#endif
-
-#if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,0)) && \
-     !(SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(10,4,0)))
-static inline __u32 skb_get_hash_raw(const struct sk_buff *skb)
-{
-#ifdef NETIF_F_RXHASH
-	return skb->rxhash;
-#else
-	return 0;
-#endif /* NETIF_F_RXHASH */
-}
-#endif /* !RHEL > 5.9 && !SLES >= 10.4 */
-
-#if (RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,5))
-#define request_firmware_direct	request_firmware
-#endif /* !RHEL || RHEL < 7.5 */
-
-#else /* >= 3.14.0 */
-
-/* for ndo_dfwd_ ops add_station, del_station and _start_xmit */
-#ifndef HAVE_NDO_DFWD_OPS
-#define HAVE_NDO_DFWD_OPS
-#endif
-#define HAVE_NDO_SELECT_QUEUE_ACCEL_FALLBACK
-#endif /* 3.14.0 */
-
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,15,0) )
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35) )
-#define HAVE_SKBUFF_RXHASH
-#endif /* >= 2.6.35 */
-#if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,1)) && \
-     !(UBUNTU_VERSION_CODE && UBUNTU_VERSION_CODE >= UBUNTU_VERSION(3,13,0,30)))
-#define u64_stats_fetch_begin_irq u64_stats_fetch_begin_bh
-#define u64_stats_fetch_retry_irq u64_stats_fetch_retry_bh
-#endif
-
-char *_kc_devm_kstrdup(struct device *dev, const char *s, gfp_t gfp);
-#define devm_kstrdup(dev, s, gfp) _kc_devm_kstrdup(dev, s, gfp)
-
-#else /* >= 3.15.0 */
-#define HAVE_NET_GET_RANDOM_ONCE
-#define HAVE_PTP_1588_CLOCK_PINS
-#define HAVE_NETDEV_PORT
-#endif /* 3.15.0 */
 
 #endif /* _KCOMPAT_H_ */

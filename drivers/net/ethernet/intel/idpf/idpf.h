@@ -28,11 +28,9 @@ struct idpf_vport_max_q;
 #include <net/ip6_checksum.h>
 #include <net/ipv6.h>
 #include <net/sch_generic.h>
-#ifdef HAVE_VXLAN_RX_OFFLOAD
 #if IS_ENABLED(CONFIG_VXLAN)
 #include <net/vxlan.h>
 #endif
-#endif /* HAVE_VXLAN_RX_OFFLOAD */
 #ifdef HAVE_GRE_ENCAP_OFFLOAD
 #include <net/gre.h>
 #endif /* HAVE_GRE_ENCAP_OFFLOAD */
