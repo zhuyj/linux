@@ -1741,15 +1741,5 @@ uint32_t _kc__div64_32(uint64_t *dividend, uint32_t divisor);
 #else /* 2.6.0 */
 
 #endif /* 2.6.0 => 2.5.28 */
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,3) )
-#define dma_pool pci_pool
-#define dma_pool_destroy pci_pool_destroy
-#define dma_pool_alloc pci_pool_alloc
-#define dma_pool_free pci_pool_free
-
-#define dma_pool_create(name,dev,size,align,allocation) \
-       pci_pool_create((name),to_pci_dev(dev),(size),(align),(allocation))
-#endif /* < 2.6.3 */
 
 #endif /* _KCOMPAT_H_ */
