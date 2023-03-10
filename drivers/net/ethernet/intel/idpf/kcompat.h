@@ -5364,7 +5364,6 @@ static inline u64 ktime_get_boot_ns(void)
 #else
 #define HAVE_DCBNL_OPS_SETAPP_RETURN_INT
 #include <linux/time64.h>
-#define HAVE_RHASHTABLE
 #endif /* 3.17.0 */
 
 /*****************************************************************************/
@@ -5579,85 +5578,5 @@ pci_device_to_OF_node(const struct pci_dev __always_unused *pdev) { return NULL;
 #else /* < 4.0 */
 #define HAVE_DDP_PROFILE_UPLOAD_SUPPORT
 #endif /* < 4.0 */
-
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0) )
-#ifndef NO_PTP_SUPPORT
-#ifdef HAVE_INCLUDE_LINUX_TIMECOUNTER_H
-#include <linux/timecounter.h>
-#else
-#include <linux/clocksource.h>
-#endif
-static inline void __kc_timecounter_adjtime(struct timecounter *tc, s64 delta)
-{
-	tc->nsec += delta;
-}
-
-static inline struct net_device *
-of_find_net_device_by_node(struct device_node __always_unused *np)
-{
-	return NULL;
-}
-
-#define timecounter_adjtime __kc_timecounter_adjtime
-#endif
-#if ((RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,2))) || \
-     (SLE_VERSION_CODE && (SLE_VERSION_CODE >= SLE_VERSION(12,2,0))))
-#define HAVE_NDO_SET_VF_RSS_QUERY_EN
-#endif
-#if RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,2))
-#define HAVE_NDO_BRIDGE_GETLINK_NLFLAGS
-#define HAVE_RHEL7_EXTENDED_NDO_SET_TX_MAXRATE
-#define HAVE_NDO_SET_TX_MAXRATE
-#endif
-#if !((RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(6,8) && RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)) && \
-      (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,2)) && \
-      (SLE_VERSION_CODE > SLE_VERSION(12,1,0)))
-unsigned int _kc_cpumask_local_spread(unsigned int i, int node);
-#define cpumask_local_spread _kc_cpumask_local_spread
-#endif
-#ifdef HAVE_RHASHTABLE
-#define rhashtable_loopup_fast(ht, key, params)		\
-	do {						\
-		(void)params;				\
-		rhashtable_lookup((ht), (key));		\
-	} while (0)
-
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0) )
-#define rhashtable_insert_fast(ht, obj, params)			\
-	do {							\
-		(void)params;					\
-		rhashtable_insert((ht), (obj), GFP_KERNEL);	\
-	} while (0)
-
-#define rhashtable_remove_fast(ht, obj, params)			\
-	do {							\
-		(void)params;					\
-		rhashtable_remove((ht), (obj), GFP_KERNEL);	\
-	} while (0)
-
-#else /* >= 3,19,0 */
-#define rhashtable_insert_fast(ht, obj, params)			\
-	do {							\
-		(void)params;					\
-		rhashtable_insert((ht), (obj));			\
-	} while (0)
-
-#define rhashtable_remove_fast(ht, obj, params)			\
-	do {							\
-		(void)params;					\
-		rhashtable_remove((ht), (obj));			\
-	} while (0)
-
-#endif /* 3,19,0 */
-#endif /* HAVE_RHASHTABLE */
-#else /* >= 4,1,0 */
-#define HAVE_NDO_GET_PHYS_PORT_NAME
-#define HAVE_PTP_CLOCK_INFO_GETTIME64
-#define HAVE_NDO_BRIDGE_GETLINK_NLFLAGS
-#define HAVE_PASSTHRU_FEATURES_CHECK
-#define HAVE_NDO_SET_VF_RSS_QUERY_EN
-#define HAVE_NDO_SET_TX_MAXRATE
-#endif /* 4,1,0 */
 
 #endif /* _KCOMPAT_H_ */
