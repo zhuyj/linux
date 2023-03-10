@@ -2557,40 +2557,4 @@ static inline int compound_order(struct page *page)
 #define HAVE_NETDEV_STATS_IN_NETDEV
 #endif /* < 2.6.22 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22) )
-#undef SET_MODULE_OWNER
-#define SET_MODULE_OWNER(dev) do { } while (0)
-#endif /* > 2.6.22 */
-
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23) )
-#define netif_subqueue_stopped(_a, _b) 0
-#ifndef PTR_ALIGN
-#define PTR_ALIGN(p, a)         ((typeof(p))ALIGN((unsigned long)(p), (a)))
-#endif
-
-#ifndef CONFIG_PM_SLEEP
-#define CONFIG_PM_SLEEP	CONFIG_PM
-#endif
-
-#if ( LINUX_VERSION_CODE > KERNEL_VERSION(2,6,13) )
-#define HAVE_ETHTOOL_GET_PERM_ADDR
-#endif /* 2.6.14 through 2.6.22 */
-
-static inline int __kc_skb_cow_head(struct sk_buff *skb, unsigned int headroom)
-{
-	int delta = 0;
-
-	if (headroom > (skb->data - skb->head))
-		delta = headroom - (skb->data - skb->head);
-
-	if (delta || skb_header_cloned(skb))
-		return pskb_expand_head(skb, ALIGN(delta, NET_SKB_PAD), 0,
-					GFP_ATOMIC);
-	return 0;
-}
-#define skb_cow_head(s, h) __kc_skb_cow_head((s), (h))
-#endif /* < 2.6.23 */
-
 #endif /* _KCOMPAT_H_ */
