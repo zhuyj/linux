@@ -4289,7 +4289,6 @@ static inline void _kc_eth_random_addr(u8 *addr)
 #define DMA_ATTR_SKIP_CPU_SYNC 0
 #endif
 #else /* < 3.6.0 */
-#define HAVE_STRUCT_PAGE_PFMEMALLOC
 #endif /* < 3.6.0 */
 
 /******************************************************************************/
@@ -4977,7 +4976,6 @@ static inline struct pci_dev *pci_upstream_bridge(struct pci_dev *dev)
 #endif
 
 #if (SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(12,1,0))
-#undef HAVE_STRUCT_PAGE_PFMEMALLOC
 #define HAVE_DCBNL_OPS_SETAPP_RETURN_INT
 #endif
 #ifndef list_next_entry
@@ -5661,26 +5659,5 @@ unsigned int _kc_cpumask_local_spread(unsigned int i, int node);
 #define HAVE_NDO_SET_VF_RSS_QUERY_EN
 #define HAVE_NDO_SET_TX_MAXRATE
 #endif /* 4,1,0 */
-
-/*****************************************************************************/
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,1,9))
-#if (!(RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,2)) && \
-     !((SLE_VERSION_CODE == SLE_VERSION(11,3,0)) && \
-       (SLE_LOCALVERSION_CODE >= SLE_LOCALVERSION(0,47,71))) && \
-     !((SLE_VERSION_CODE == SLE_VERSION(11,4,0)) && \
-       (SLE_LOCALVERSION_CODE >= SLE_LOCALVERSION(65,0,0))) && \
-     !(SLE_VERSION_CODE >= SLE_VERSION(12,1,0)))
-static inline bool page_is_pfmemalloc(struct page __maybe_unused *page)
-{
-#ifdef HAVE_STRUCT_PAGE_PFMEMALLOC
-	return page->pfmemalloc;
-#else
-	return false;
-#endif
-}
-#endif /* !RHEL7.2+ && !SLES11sp3(3.0.101-0.47.71+ update) && !SLES11sp4(3.0.101-65+ update) & !SLES12sp1+ */
-#else
-#undef HAVE_STRUCT_PAGE_PFMEMALLOC
-#endif /* 4.1.9 */
 
 #endif /* _KCOMPAT_H_ */
