@@ -2936,30 +2936,4 @@ static inline void _kc_ethtool_cmd_speed_set(struct ethtool_cmd *ep,
 #endif /* CONFIG_DEBUG_FS */
 #endif /* < 2.6.27 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28) )
-#define pci_ioremap_bar(pdev, bar)	ioremap(pci_resource_start(pdev, bar), \
-					        pci_resource_len(pdev, bar))
-#define pci_wake_from_d3 _kc_pci_wake_from_d3
-#define pci_prepare_to_sleep _kc_pci_prepare_to_sleep
-int _kc_pci_wake_from_d3(struct pci_dev *dev, bool enable);
-int _kc_pci_prepare_to_sleep(struct pci_dev *dev);
-#define netdev_alloc_page(a) alloc_page(GFP_ATOMIC)
-#ifndef __skb_queue_head_init
-static inline void __kc_skb_queue_head_init(struct sk_buff_head *list)
-{
-	list->prev = list->next = (struct sk_buff *)list;
-	list->qlen = 0;
-}
-#define __skb_queue_head_init(_q) __kc_skb_queue_head_init(_q)
-#endif
-
-#define PCI_EXP_DEVCAP2		36	/* Device Capabilities 2 */
-#define PCI_EXP_DEVCTL2		40	/* Device Control 2 */
-
-#define PCI_EXP_DEVCAP_FLR	0x10000000 /* Function Level Reset */
-#define PCI_EXP_DEVCTL_BCR_FLR	0x8000 /* Bridge Configuration Retry / FLR */
-
-#endif /* < 2.6.28 */
-
 #endif /* _KCOMPAT_H_ */
