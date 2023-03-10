@@ -121,12 +121,8 @@ static u32 idpf_get_rxfh_indir_size(struct net_device *netdev)
  *
  * Reads the indirection table directly from the hardware. Always returns 0.
  */
-#ifdef HAVE_RXFH_HASHFUNC
 static int idpf_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key,
 			 u8 *hfunc)
-#else
-static int idpf_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key)
-#endif
 {
 	struct idpf_vport *vport = idpf_netdev_to_vport(netdev);
 	struct idpf_rss_data *rss_data;
@@ -147,10 +143,8 @@ static int idpf_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key)
 	if (vport->state != __IDPF_VPORT_UP)
 		return 0;
 
-#ifdef HAVE_RXFH_HASHFUNC
 	if (hfunc)
 		*hfunc = ETH_RSS_HASH_TOP;
-#endif
 
 	if (key)
 		memcpy(key, rss_data->rss_key, rss_data->rss_key_size);
@@ -174,15 +168,8 @@ static int idpf_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key)
  * Returns -EINVAL if the table specifies an invalid queue id, otherwise
  * returns 0 after programming the table.
  */
-#ifdef HAVE_RXFH_HASHFUNC
 static int idpf_set_rxfh(struct net_device *netdev, const u32 *indir,
 			 const u8 *key, const u8 hfunc)
-#elif defined(HAVE_RXFH_NONCONST)
-static int idpf_set_rxfh(struct net_device *netdev, u32 *indir, u8 *key)
-#else
-static int idpf_set_rxfh(struct net_device *netdev, const u32 *indir,
-			 const u8 *key)
-#endif /* HAVE_RXFH_HASHFUNC or HAVE_RXFH_NONCONST */
 {
 	struct idpf_vport *vport = idpf_netdev_to_vport(netdev);
 	struct idpf_rss_data *rss_data;
@@ -202,10 +189,9 @@ static int idpf_set_rxfh(struct net_device *netdev, const u32 *indir,
 	rss_data = &adapter->vport_config[vport->idx]->user_config.rss_data;
 	if (vport->state != __IDPF_VPORT_UP)
 		return 0;
-#ifdef HAVE_RXFH_HASHFUNC
+
 	if (hfunc != ETH_RSS_HASH_NO_CHANGE && hfunc != ETH_RSS_HASH_TOP)
 		return -EOPNOTSUPP;
-#endif
 
 	if (key)
 		memcpy(rss_data->rss_key, key, rss_data->rss_key_size);
