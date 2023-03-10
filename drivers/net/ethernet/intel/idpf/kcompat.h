@@ -1812,28 +1812,4 @@ static inline struct mii_ioctl_data *_kc_if_mii(struct ifreq *rq)
 #endif
 #endif /* < 2.6.7 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8) )
-#ifndef PCI_EXP_DEVCTL
-#define PCI_EXP_DEVCTL 8
-#endif
-#ifndef PCI_EXP_DEVCTL_CERE
-#define PCI_EXP_DEVCTL_CERE 0x0001
-#endif
-#define PCI_EXP_FLAGS		2	/* Capabilities register */
-#define PCI_EXP_FLAGS_VERS	0x000f	/* Capability version */
-#define PCI_EXP_FLAGS_TYPE	0x00f0	/* Device/Port type */
-#define  PCI_EXP_TYPE_ENDPOINT	0x0	/* Express Endpoint */
-#define  PCI_EXP_TYPE_LEG_END	0x1	/* Legacy Endpoint */
-#define  PCI_EXP_TYPE_ROOT_PORT 0x4	/* Root Port */
-#define  PCI_EXP_TYPE_DOWNSTREAM 0x6	/* Downstream Port */
-#define PCI_EXP_FLAGS_SLOT	0x0100	/* Slot implemented */
-#define PCI_EXP_DEVCAP		4	/* Device capabilities */
-#define PCI_EXP_DEVSTA		10	/* Device Status */
-#define msleep(x)	do { set_current_state(TASK_UNINTERRUPTIBLE); \
-				schedule_timeout((x * HZ)/1000 + 2); \
-			} while (0)
-
-#endif /* < 2.6.8 */
-
 #endif /* _KCOMPAT_H_ */
