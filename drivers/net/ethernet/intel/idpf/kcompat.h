@@ -2153,30 +2153,4 @@ static inline unsigned _kc_compare_ether_addr(const u8 *addr1, const u8 *addr2)
 #define compare_ether_addr(addr1, addr2) _kc_compare_ether_addr(addr1, addr2)
 #endif /* < 2.6.15 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16) )
-#undef DEFINE_MUTEX
-#define DEFINE_MUTEX(x)	DECLARE_MUTEX(x)
-#define mutex_lock(x)	down_interruptible(x)
-#define mutex_unlock(x)	up(x)
-
-#ifndef ____cacheline_internodealigned_in_smp
-#ifdef CONFIG_SMP
-#define ____cacheline_internodealigned_in_smp ____cacheline_aligned_in_smp
-#else
-#define ____cacheline_internodealigned_in_smp
-#endif /* CONFIG_SMP */
-#endif /* ____cacheline_internodealigned_in_smp */
-#undef HAVE_PCI_ERS
-#else /* 2.6.16 and above */
-#undef HAVE_PCI_ERS
-#define HAVE_PCI_ERS
-#if ( SLE_VERSION_CODE && SLE_VERSION_CODE == SLE_VERSION(10,4,0) )
-#ifdef device_can_wakeup
-#undef device_can_wakeup
-#endif /* device_can_wakeup */
-#define device_can_wakeup(dev) 1
-#endif /* SLE_VERSION(10,4,0) */
-#endif /* < 2.6.16 */
-
 #endif /* _KCOMPAT_H_ */
