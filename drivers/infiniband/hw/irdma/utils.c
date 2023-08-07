@@ -2188,21 +2188,26 @@ void irdma_prm_return_pbles(struct irdma_pble_prm *pprm,
 	spin_unlock_irqrestore(&pprm->prm_lock, flags);
 }
 
+static struct folio *vmalloc_to_folio(const void *addr)
+{
+	return page_folio(vmalloc_to_page(addr));
+}
+
 int irdma_map_vm_page_list(struct irdma_hw *hw, void *va, dma_addr_t *pg_dma,
 			   u32 pg_cnt)
 {
-	struct page *vm_page;
+	struct folio *vm_folio;
 	int i;
 	u8 *addr;
 
 	addr = (u8 *)(uintptr_t)va;
 	for (i = 0; i < pg_cnt; i++) {
-		vm_page = vmalloc_to_page(addr);
-		if (!vm_page)
+		vm_folio = vmalloc_to_folio(addr);
+		if (!vm_folio)
 			goto err;
 
-		pg_dma[i] = dma_map_page(hw->device, vm_page, 0, PAGE_SIZE,
-					 DMA_BIDIRECTIONAL);
+		pg_dma[i] = dma_map_page(hw->device, folio_page(vm_folio, 0), 0,
+					 PAGE_SIZE, DMA_BIDIRECTIONAL);
 		if (dma_mapping_error(hw->device, pg_dma[i]))
 			goto err;
 
