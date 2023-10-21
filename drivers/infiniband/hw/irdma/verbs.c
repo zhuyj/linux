@@ -559,7 +559,7 @@ static void irdma_setup_virt_qp(struct irdma_device *iwdev,
 	struct irdma_pbl *iwpbl = iwqp->iwpbl;
 	struct irdma_qp_mr *qpmr = &iwpbl->qp_mr;
 
-	iwqp->page = qpmr->sq_page;
+	iwqp->folio = qpmr->sq_folio;
 	init_info->shadow_area_pa = qpmr->shadow;
 	if (iwpbl->pbl_allocated) {
 		init_info->virtual_map = true;
@@ -2329,7 +2329,7 @@ static void irdma_copy_user_pgaddrs(struct irdma_mr *iwmr, u64 *pbl,
 	pinfo = (level == PBLE_LEVEL_1) ? NULL : palloc->level2.leaf;
 
 	if (iwmr->type == IRDMA_MEMREG_TYPE_QP)
-		iwpbl->qp_mr.sq_page = sg_page(region->sgt_append.sgt.sgl);
+		iwpbl->qp_mr.sq_folio = page_folio(sg_page(region->sgt_append.sgt.sgl));
 
 	rdma_umem_for_each_dma_block(region, &biter, iwmr->page_size) {
 		*pbl = rdma_block_iter_dma_address(&biter);
