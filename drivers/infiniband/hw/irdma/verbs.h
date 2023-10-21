@@ -69,7 +69,7 @@ struct irdma_qp_mr {
 	struct irdma_hmc_pble sq_pbl;
 	struct irdma_hmc_pble rq_pbl;
 	dma_addr_t shadow;
-	struct page *sq_page;
+	struct folio *sq_folio;
 };
 
 struct irdma_cq_buf {
@@ -189,7 +189,7 @@ struct irdma_qp {
 	struct irdma_qp_context *iwqp_context;
 	void *pbl_vbase;
 	dma_addr_t pbl_pbase;
-	struct page *page;
+	struct folio *folio;
 	u8 active_conn : 1;
 	u8 user_mode : 1;
 	u8 hte_added : 1;
