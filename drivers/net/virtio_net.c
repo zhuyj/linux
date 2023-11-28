@@ -24,6 +24,10 @@
 #include <net/net_failover.h>
 #include <net/netdev_rx_queue.h>
 
+#include <linux/numa.h>
+#include <net/page_pool/types.h>
+#include <net/page_pool/helpers.h>
+
 static int napi_weight = NAPI_POLL_WEIGHT;
 module_param(napi_weight, int, 0444);
 
@@ -175,7 +179,7 @@ struct receive_queue {
 	struct virtnet_interrupt_coalesce intr_coal;
 
 	/* Chain pages by the private ptr. */
-	struct page *pages;
+	struct page_pool *page_pool;
 
 	/* Average packet length for mergeable receive buffers. */
 	struct ewma_pkt_len mrg_avg_pkt_len;
@@ -381,33 +385,6 @@ skb_vnet_common_hdr(struct sk_buff *skb)
 	return (struct virtio_net_common_hdr *)skb->cb;
 }
 
-/*
- * private is used to chain pages for big packets, put the whole
- * most recent used list in the beginning for reuse
- */
-static void give_pages(struct receive_queue *rq, struct page *page)
-{
-	struct page *end;
-
-	/* Find end of list, sew whole thing into vi->rq.pages. */
-	for (end = page; end->private; end = (struct page *)end->private);
-	end->private = (unsigned long)rq->pages;
-	rq->pages = page;
-}
-
-static struct page *get_a_page(struct receive_queue *rq, gfp_t gfp_mask)
-{
-	struct page *p = rq->pages;
-
-	if (p) {
-		rq->pages = (struct page *)p->private;
-		/* clear private here, it is used to chain pages */
-		p->private = 0;
-	} else
-		p = alloc_page(gfp_mask);
-	return p;
-}
-
 static void enable_delayed_refill(struct virtnet_info *vi)
 {
 	spin_lock_bh(&vi->refill_lock);
@@ -493,6 +470,8 @@ static struct sk_buff *virtnet_build_skb(void *buf, unsigned int buflen,
 	return skb;
 }
 
+static void virtnet_put_pages(struct receive_queue *rq, struct page *page);
+
 /* Called from bottom half context */
 static struct sk_buff *page_to_skb(struct virtnet_info *vi,
 				   struct receive_queue *rq,
@@ -532,7 +511,8 @@ static struct sk_buff *page_to_skb(struct virtnet_info *vi,
 
 		page = (struct page *)page->private;
 		if (page)
-			give_pages(rq, page);
+			virtnet_put_pages(rq, page);
+
 		goto ok;
 	}
 
@@ -583,13 +563,13 @@ static struct sk_buff *page_to_skb(struct virtnet_info *vi,
 	}
 
 	if (page)
-		give_pages(rq, page);
+		virtnet_put_pages(rq, page);
 
 ok:
 	hdr = skb_vnet_common_hdr(skb);
 	memcpy(hdr, hdr_p, hdr_len);
 	if (page_to_free)
-		put_page(page_to_free);
+		virtnet_put_pages(rq, page_to_free);
 
 	return skb;
 }
@@ -1306,7 +1286,7 @@ static struct sk_buff *receive_big(struct net_device *dev,
 
 err:
 	u64_stats_inc(&stats->drops);
-	give_pages(rq, page);
+	virtnet_put_pages(rq, page);
 	return NULL;
 }
 
@@ -1841,6 +1821,14 @@ static int add_recvbuf_small(struct virtnet_info *vi, struct receive_queue *rq,
 	return err;
 }
 
+static void virtnet_put_pages(struct receive_queue *rq, struct page *page)
+{
+	struct page *iter;
+
+	for (iter = page; iter->private; iter = (struct page *)iter->private)
+		page_pool_recycle_direct(rq->page_pool, iter);
+}
+
 static int add_recvbuf_big(struct virtnet_info *vi, struct receive_queue *rq,
 			   gfp_t gfp)
 {
@@ -1852,10 +1840,10 @@ static int add_recvbuf_big(struct virtnet_info *vi, struct receive_queue *rq,
 
 	/* page in rq->sg[vi->big_packets_num_skbfrags + 1] is list tail */
 	for (i = vi->big_packets_num_skbfrags + 1; i > 1; --i) {
-		first = get_a_page(rq, gfp);
+		first = page_pool_dev_alloc_pages(rq->page_pool);
 		if (!first) {
 			if (list)
-				give_pages(rq, list);
+				virtnet_put_pages(rq, list);
 			return -ENOMEM;
 		}
 		sg_set_buf(&rq->sg[i], page_address(first), PAGE_SIZE);
@@ -1865,9 +1853,9 @@ static int add_recvbuf_big(struct virtnet_info *vi, struct receive_queue *rq,
 		list = first;
 	}
 
-	first = get_a_page(rq, gfp);
+	first = page_pool_dev_alloc_pages(rq->page_pool);
 	if (!first) {
-		give_pages(rq, list);
+		virtnet_put_pages(rq, list);
 		return -ENOMEM;
 	}
 	p = page_address(first);
@@ -1885,7 +1873,7 @@ static int add_recvbuf_big(struct virtnet_info *vi, struct receive_queue *rq,
 	err = virtqueue_add_inbuf(rq->vq, rq->sg, vi->big_packets_num_skbfrags + 2,
 				  first, gfp);
 	if (err < 0)
-		give_pages(rq, first);
+		virtnet_put_pages(rq, list);
 
 	return err;
 }
@@ -3975,6 +3963,11 @@ static void virtnet_free_queues(struct virtnet_info *vi)
 	int i;
 
 	for (i = 0; i < vi->max_queue_pairs; i++) {
+		page_pool_destroy(vi->rq[i].page_pool);
+		vi->rq[i].page_pool = NULL;
+	}
+
+	for (i = 0; i < vi->max_queue_pairs; i++) {
 		__netif_napi_del(&vi->rq[i].napi);
 		__netif_napi_del(&vi->sq[i].napi);
 	}
@@ -3995,9 +3988,6 @@ static void _free_receive_bufs(struct virtnet_info *vi)
 	int i;
 
 	for (i = 0; i < vi->max_queue_pairs; i++) {
-		while (vi->rq[i].pages)
-			__free_pages(get_a_page(&vi->rq[i], GFP_KERNEL), 0);
-
 		old_prog = rtnl_dereference(vi->rq[i].xdp_prog);
 		RCU_INIT_POINTER(vi->rq[i].xdp_prog, NULL);
 		if (old_prog)
@@ -4039,7 +4029,7 @@ static void virtnet_rq_free_unused_buf(struct virtqueue *vq, void *buf)
 	if (vi->mergeable_rx_bufs)
 		put_page(virt_to_head_page(buf));
 	else if (vi->big_packets)
-		give_pages(&vi->rq[i], buf);
+		virtnet_put_pages(&vi->rq[i], buf);
 	else
 		put_page(virt_to_head_page(buf));
 }
@@ -4176,6 +4166,28 @@ err_vq:
 	return ret;
 }
 
+#define VIRTNET_RING_SIZE	256
+static int virtnet_create_page_pool(struct receive_queue *rq,
+				    struct net_device *dev)
+{
+	struct page_pool_params pp_params = {
+		.order = 0,
+		.pool_size = VIRTNET_RING_SIZE,
+		.nid = NUMA_NO_NODE,
+		.dev = &dev->dev,
+	};
+
+	rq->page_pool = page_pool_create(&pp_params);
+	if (IS_ERR(rq->page_pool)) {
+		int err = PTR_ERR(rq->page_pool);
+
+		rq->page_pool = NULL;
+		return err;
+	}
+
+	return 0;
+}
+
 static int virtnet_alloc_queues(struct virtnet_info *vi)
 {
 	int i;
@@ -4196,7 +4208,14 @@ static int virtnet_alloc_queues(struct virtnet_info *vi)
 
 	INIT_DELAYED_WORK(&vi->refill, refill_work);
 	for (i = 0; i < vi->max_queue_pairs; i++) {
-		vi->rq[i].pages = NULL;
+		if (virtnet_create_page_pool(&vi->rq[i], vi->dev)) {
+			int j = i - 1;
+			for (; j >= 0; j--) {
+				page_pool_destroy(vi->rq[j].page_pool);
+				vi->rq[j].page_pool = NULL;
+			}
+			goto err_rq;
+		}
 		netif_napi_add_weight(vi->dev, &vi->rq[i].napi, virtnet_poll,
 				      napi_weight);
 		netif_napi_add_tx_weight(vi->dev, &vi->sq[i].napi,
