@@ -966,7 +966,7 @@ out:
 	return ret;
 }
 
-static void put_xdp_frags(struct xdp_buff *xdp)
+static void put_xdp_frags(struct receive_queue *rq, struct xdp_buff *xdp)
 {
 	struct skb_shared_info *shinfo;
 	struct page *xdp_page;
@@ -976,7 +976,7 @@ static void put_xdp_frags(struct xdp_buff *xdp)
 		shinfo = xdp_get_shared_info_from_buff(xdp);
 		for (i = 0; i < shinfo->nr_frags; i++) {
 			xdp_page = skb_frag_page(&shinfo->frags[i]);
-			put_page(xdp_page);
+			virtnet_put_pages(rq, xdp_page);
 		}
 	}
 }
@@ -1067,7 +1067,7 @@ static struct page *xdp_linearize_page(struct receive_queue *rq,
 	if (page_off + *len + tailroom > PAGE_SIZE)
 		return NULL;
 
-	page = alloc_page(GFP_ATOMIC);
+	page = page_pool_dev_alloc_pages(rq->page_pool);
 	if (!page)
 		return NULL;
 
@@ -1090,21 +1090,21 @@ static struct page *xdp_linearize_page(struct receive_queue *rq,
 		 * is sending packet larger than the MTU.
 		 */
 		if ((page_off + buflen + tailroom) > PAGE_SIZE) {
-			put_page(p);
+			virtnet_put_pages(rq, p);
 			goto err_buf;
 		}
 
 		memcpy(page_address(page) + page_off,
 		       page_address(p) + off, buflen);
 		page_off += buflen;
-		put_page(p);
+		virtnet_put_pages(rq, p);
 	}
 
 	/* Headroom does not contribute to packet length */
 	*len = page_off - VIRTIO_XDP_HEADROOM;
 	return page;
 err_buf:
-	__free_pages(page, 0);
+	virtnet_put_pages(rq, page);
 	return NULL;
 }
 
@@ -1308,7 +1308,7 @@ static void mergeable_buf_free(struct receive_queue *rq, int num_buf,
 		}
 		u64_stats_add(&stats->bytes, len);
 		page = virt_to_head_page(buf);
-		put_page(page);
+		virtnet_put_pages(rq, page);
 	}
 }
 
@@ -1428,7 +1428,7 @@ static int virtnet_build_xdp_buff_mrg(struct net_device *dev,
 		cur_frag_size = truesize;
 		xdp_frags_truesz += cur_frag_size;
 		if (unlikely(len > truesize - room || cur_frag_size > PAGE_SIZE)) {
-			put_page(page);
+			virtnet_put_pages(rq, page);
 			pr_debug("%s: rx error: len %u exceeds truesize %lu\n",
 				 dev->name, len, (unsigned long)(truesize - room));
 			dev->stats.rx_length_errors++;
@@ -1447,7 +1447,7 @@ static int virtnet_build_xdp_buff_mrg(struct net_device *dev,
 	return 0;
 
 err:
-	put_xdp_frags(xdp);
+	put_xdp_frags(rq, xdp);
 	return -EINVAL;
 }
 
@@ -1508,7 +1508,7 @@ static void *mergeable_xdp_get_buf(struct virtnet_info *vi,
 		if (*len + xdp_room > PAGE_SIZE)
 			return NULL;
 
-		xdp_page = alloc_page(GFP_ATOMIC);
+		xdp_page = page_pool_dev_alloc_pages(rq->page_pool);
 		if (!xdp_page)
 			return NULL;
 
@@ -1518,7 +1518,7 @@ static void *mergeable_xdp_get_buf(struct virtnet_info *vi,
 
 	*frame_sz = PAGE_SIZE;
 
-	put_page(*page);
+	virtnet_put_pages(rq, *page);
 
 	*page = xdp_page;
 
@@ -1564,6 +1564,8 @@ static struct sk_buff *receive_mergeable_xdp(struct net_device *dev,
 		head_skb = build_skb_from_xdp_buff(dev, vi, &xdp, xdp_frags_truesz);
 		if (unlikely(!head_skb))
 			break;
+
+		skb_mark_for_recycle(head_skb);
 		return head_skb;
 
 	case XDP_TX:
@@ -1574,10 +1576,10 @@ static struct sk_buff *receive_mergeable_xdp(struct net_device *dev,
 		break;
 	}
 
-	put_xdp_frags(&xdp);
+	put_xdp_frags(rq, &xdp);
 
 err_xdp:
-	put_page(page);
+	virtnet_put_pages(rq, page);
 	mergeable_buf_free(rq, num_buf, dev, stats);
 
 	u64_stats_inc(&stats->xdp_drops);
@@ -1631,6 +1633,8 @@ static struct sk_buff *receive_mergeable(struct net_device *dev,
 	head_skb = page_to_skb(vi, rq, page, offset, len, truesize, headroom);
 	curr_skb = head_skb;
 
+	skb_mark_for_recycle(curr_skb);
+
 	if (unlikely(!curr_skb))
 		goto err_skb;
 	while (--num_buf) {
@@ -1673,6 +1677,7 @@ static struct sk_buff *receive_mergeable(struct net_device *dev,
 			curr_skb = nskb;
 			head_skb->truesize += nskb->truesize;
 			num_skb_frags = 0;
+			skb_mark_for_recycle(curr_skb);
 		}
 		if (curr_skb != head_skb) {
 			head_skb->data_len += len;
@@ -1681,7 +1686,7 @@ static struct sk_buff *receive_mergeable(struct net_device *dev,
 		}
 		offset = buf - page_address(page);
 		if (skb_can_coalesce(curr_skb, num_skb_frags, page, offset)) {
-			put_page(page);
+			virtnet_put_pages(rq, page);
 			skb_coalesce_rx_frag(curr_skb, num_skb_frags - 1,
 					     len, truesize);
 		} else {
@@ -1694,7 +1699,7 @@ static struct sk_buff *receive_mergeable(struct net_device *dev,
 	return head_skb;
 
 err_skb:
-	put_page(page);
+	virtnet_put_pages(rq, page);
 	mergeable_buf_free(rq, num_buf, dev, stats);
 
 err_buf:
@@ -1898,11 +1903,11 @@ static unsigned int get_mergeable_buf_len(struct receive_queue *rq,
 static int add_recvbuf_mergeable(struct virtnet_info *vi,
 				 struct receive_queue *rq, gfp_t gfp)
 {
-	struct page_frag *alloc_frag = &rq->alloc_frag;
 	unsigned int headroom = virtnet_get_headroom(vi);
 	unsigned int tailroom = headroom ? sizeof(struct skb_shared_info) : 0;
 	unsigned int room = SKB_DATA_ALIGN(headroom + tailroom);
-	unsigned int len, hole;
+	unsigned int len;
+	struct page *page;
 	void *ctx;
 	char *buf;
 	int err;
@@ -1913,23 +1918,12 @@ static int add_recvbuf_mergeable(struct virtnet_info *vi,
 	 */
 	len = get_mergeable_buf_len(rq, &rq->mrg_avg_pkt_len, room);
 
-	buf = virtnet_rq_alloc(rq, len + room, gfp);
-	if (unlikely(!buf))
+	page = page_pool_dev_alloc_pages(rq->page_pool);
+	if (unlikely(!page))
 		return -ENOMEM;
 
+	buf = (char *)page_address(page);
 	buf += headroom; /* advance address leaving hole at front of pkt */
-	hole = alloc_frag->size - alloc_frag->offset;
-	if (hole < len + room) {
-		/* To avoid internal fragmentation, if there is very likely not
-		 * enough space for another buffer, add the remaining space to
-		 * the current buffer.
-		 * XDP core assumes that frame_size of xdp_buff and the length
-		 * of the frag are PAGE_SIZE, so we disable the hole mechanism.
-		 */
-		if (!headroom)
-			len += hole;
-		alloc_frag->offset += hole;
-	}
 
 	virtnet_rq_init_one_sg(rq, buf, len);
 
@@ -1938,7 +1932,7 @@ static int add_recvbuf_mergeable(struct virtnet_info *vi,
 	if (err < 0) {
 		if (rq->do_dma)
 			virtnet_rq_unmap(rq, buf, 0);
-		put_page(virt_to_head_page(buf));
+		virtnet_put_pages(rq, virt_to_head_page(buf));
 	}
 
 	return err;
@@ -2176,7 +2170,8 @@ static int virtnet_enable_queue_pair(struct virtnet_info *vi, int qp_index)
 		return err;
 
 	err = xdp_rxq_info_reg_mem_model(&vi->rq[qp_index].xdp_rxq,
-					 MEM_TYPE_PAGE_SHARED, NULL);
+					 MEM_TYPE_PAGE_POOL,
+					 vi->rq[qp_index].page_pool);
 	if (err < 0)
 		goto err_xdp_reg_mem_model;
 
@@ -4027,9 +4022,9 @@ static void virtnet_rq_free_unused_buf(struct virtqueue *vq, void *buf)
 	int i = vq2rxq(vq);
 
 	if (vi->mergeable_rx_bufs)
-		put_page(virt_to_head_page(buf));
+		virtnet_put_pages(&vi->rq[i], virt_to_head_page(buf));
 	else if (vi->big_packets)
-		virtnet_put_pages(&vi->rq[i], buf);
+		virtnet_put_pages(&vi->rq[i], virt_to_head_page(buf));
 	else
 		put_page(virt_to_head_page(buf));
 }
