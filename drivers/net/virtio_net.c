@@ -1059,19 +1059,29 @@ static struct page *xdp_linearize_page(struct receive_queue *rq,
 				       struct page *p,
 				       int offset,
 				       int page_off,
-				       unsigned int *len)
+				       unsigned int *len,
+				       unsigned int *pp_frag_offset)
 {
 	int tailroom = SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
+	unsigned int pp_frag_offset_val;
 	struct page *page;
 
 	if (page_off + *len + tailroom > PAGE_SIZE)
 		return NULL;
 
-	page = page_pool_dev_alloc_pages(rq->page_pool);
+	if (rq->page_pool->p.flags & PP_FLAG_PAGE_FRAG)
+		page = page_pool_dev_alloc_frag(rq->page_pool, pp_frag_offset,
+						PAGE_SIZE);
+	else
+		page = page_pool_dev_alloc_pages(rq->page_pool);
 	if (!page)
 		return NULL;
 
-	memcpy(page_address(page) + page_off, page_address(p) + offset, *len);
+	pp_frag_offset_val = pp_frag_offset ? *pp_frag_offset : 0;
+
+	memcpy(page_address(page) + page_off + pp_frag_offset_val,
+		page_address(p) + offset, *len);
+
 	page_off += *len;
 
 	while (--*num_buf) {
@@ -1094,8 +1104,9 @@ static struct page *xdp_linearize_page(struct receive_queue *rq,
 			goto err_buf;
 		}
 
-		memcpy(page_address(page) + page_off,
-		       page_address(p) + off, buflen);
+		memcpy(page_address(page) + page_off + pp_frag_offset_val,
+			page_address(p) + off, buflen);
+
 		page_off += buflen;
 		virtnet_put_pages(rq, p);
 	}
@@ -1172,7 +1183,7 @@ static struct sk_buff *receive_small_xdp(struct net_device *dev,
 			SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
 		xdp_page = xdp_linearize_page(rq, &num_buf, page,
 					      offset, header_offset,
-					      &tlen);
+					      &tlen, NULL);
 		if (!xdp_page)
 			goto err_xdp;
 
@@ -1464,6 +1475,7 @@ static void *mergeable_xdp_get_buf(struct virtnet_info *vi,
 {
 	unsigned int truesize = mergeable_ctx_to_truesize(ctx);
 	unsigned int headroom = mergeable_ctx_to_headroom(ctx);
+	unsigned int page_frag_offset = 0;
 	struct page *xdp_page;
 	unsigned int xdp_room;
 
@@ -1499,7 +1511,7 @@ static void *mergeable_xdp_get_buf(struct virtnet_info *vi,
 		xdp_page = xdp_linearize_page(rq, num_buf,
 					      *page, offset,
 					      VIRTIO_XDP_HEADROOM,
-					      len);
+					      len, &page_frag_offset);
 		if (!xdp_page)
 			return NULL;
 	} else {
@@ -1508,12 +1520,17 @@ static void *mergeable_xdp_get_buf(struct virtnet_info *vi,
 		if (*len + xdp_room > PAGE_SIZE)
 			return NULL;
 
-		xdp_page = page_pool_dev_alloc_pages(rq->page_pool);
+		if (rq->page_pool->p.flags & PP_FLAG_PAGE_FRAG)
+			xdp_page = page_pool_dev_alloc_frag(rq->page_pool,
+							    &page_frag_offset, PAGE_SIZE);
+		else
+			xdp_page = page_pool_dev_alloc_pages(rq->page_pool);
+
 		if (!xdp_page)
 			return NULL;
 
-		memcpy(page_address(xdp_page) + VIRTIO_XDP_HEADROOM,
-		       page_address(*page) + offset, *len);
+		memcpy(page_address(xdp_page) + VIRTIO_XDP_HEADROOM +
+			page_frag_offset, page_address(*page) + offset, *len);
 	}
 
 	*frame_sz = PAGE_SIZE;
@@ -1522,7 +1539,7 @@ static void *mergeable_xdp_get_buf(struct virtnet_info *vi,
 
 	*page = xdp_page;
 
-	return page_address(*page) + VIRTIO_XDP_HEADROOM;
+	return page_address(*page) + VIRTIO_XDP_HEADROOM + page_frag_offset;
 }
 
 static struct sk_buff *receive_mergeable_xdp(struct net_device *dev,
@@ -1906,7 +1923,8 @@ static int add_recvbuf_mergeable(struct virtnet_info *vi,
 	unsigned int headroom = virtnet_get_headroom(vi);
 	unsigned int tailroom = headroom ? sizeof(struct skb_shared_info) : 0;
 	unsigned int room = SKB_DATA_ALIGN(headroom + tailroom);
-	unsigned int len;
+	unsigned int pp_frag_offset;
+	unsigned int len, hole;
 	struct page *page;
 	void *ctx;
 	char *buf;
@@ -1917,13 +1935,29 @@ static int add_recvbuf_mergeable(struct virtnet_info *vi,
 	 * disabled GSO for XDP, it won't be a big issue.
 	 */
 	len = get_mergeable_buf_len(rq, &rq->mrg_avg_pkt_len, room);
+	if (rq->page_pool->p.flags & PP_FLAG_PAGE_FRAG) {
+		if (unlikely(!page_pool_dev_alloc_frag(rq->page_pool,
+						       &pp_frag_offset, len + room)))
+			return -ENOMEM;
 
-	page = page_pool_dev_alloc_pages(rq->page_pool);
-	if (unlikely(!page))
-		return -ENOMEM;
+		buf = (char *)page_address(rq->page_pool->frag_page) +
+			pp_frag_offset;
+		buf += headroom; /* advance address leaving hole at front of pkt */
+		hole = (PAGE_SIZE << rq->page_pool->p.order)
+			- rq->page_pool->frag_offset;
+		if (hole < len + room) {
+			if (!headroom)
+				len += hole;
+			rq->page_pool->frag_offset += hole;
+		}
+	} else {
+		page = page_pool_dev_alloc_pages(rq->page_pool);
+		if (unlikely(!page))
+			return -ENOMEM;
 
-	buf = (char *)page_address(page);
-	buf += headroom; /* advance address leaving hole at front of pkt */
+		buf = (char *)page_address(page);
+		buf += headroom; /* advance address leaving hole at front of pkt */
+	}
 
 	virtnet_rq_init_one_sg(rq, buf, len);
 
@@ -4166,11 +4200,13 @@ static int virtnet_create_page_pool(struct receive_queue *rq,
 				    struct net_device *dev)
 {
 	struct page_pool_params pp_params = {
-		.order = 0,
+		.order = SKB_FRAG_PAGE_ORDER,
 		.pool_size = VIRTNET_RING_SIZE,
-		.nid = NUMA_NO_NODE,
+		.nid = dev_to_node(dev->dev.parent),
 		.dev = &dev->dev,
 	};
+
+	pp_params.flags |= PP_FLAG_PAGE_FRAG;
 
 	rq->page_pool = page_pool_create(&pp_params);
 	if (IS_ERR(rq->page_pool)) {
