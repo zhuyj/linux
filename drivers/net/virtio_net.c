@@ -4,6 +4,7 @@
  * Copyright 2007 Rusty Russell <rusty@rustcorp.com.au> IBM Corporation
  */
 //#define DEBUG
+#define pr_fmt(fmt) KBUILD_MODNAME ": %s +%d caller: %ps" fmt, __FILE__, __LINE__, __builtin_return_address(0)
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
@@ -3188,6 +3189,7 @@ static void virtnet_get_strings(struct net_device *dev, u32 stringset, u8 *data)
 				ethtool_sprintf(&p, "tx_queue_%u_%s", i,
 						virtnet_sq_stats_desc[j].desc);
 		}
+		page_pool_ethtool_stats_get_strings(p);
 		break;
 	}
 }
@@ -3199,10 +3201,27 @@ static int virtnet_get_sset_count(struct net_device *dev, int sset)
 	switch (sset) {
 	case ETH_SS_STATS:
 		return vi->curr_queue_pairs * (VIRTNET_RQ_STATS_LEN +
-					       VIRTNET_SQ_STATS_LEN);
+					       VIRTNET_SQ_STATS_LEN) +
+					       page_pool_ethtool_stats_get_count();
 	default:
 		return -EOPNOTSUPP;
 	}
+}
+
+static void virtnet_get_page_pool_stats(struct net_device *dev, u64 *data)
+{
+#ifdef CONFIG_PAGE_POOL_STATS
+	struct virtnet_info *vi = netdev_priv(dev);
+	struct page_pool_stats pp_stats = {};
+	int i;
+
+	for (i = 0; i < vi->curr_queue_pairs; i++) {
+		if (!vi->rq[i].page_pool)
+			continue;
+		page_pool_get_stats(vi->rq[i].page_pool, &pp_stats);
+	}
+	page_pool_ethtool_stats_get(data, &pp_stats);
+#endif /* CONFIG_PAGE_POOL_STATS */
 }
 
 static void virtnet_get_ethtool_stats(struct net_device *dev,
@@ -3228,6 +3247,8 @@ static void virtnet_get_ethtool_stats(struct net_device *dev,
 		} while (u64_stats_fetch_retry(&rq->stats.syncp, start));
 		idx += VIRTNET_RQ_STATS_LEN;
 	}
+
+	virtnet_get_page_pool_stats(dev, &data[idx]);
 
 	for (i = 0; i < vi->curr_queue_pairs; i++) {
 		struct send_queue *sq = &vi->sq[i];
