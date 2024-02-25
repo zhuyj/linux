@@ -57,22 +57,17 @@ struct mlx5_vf_migration_header {
 };
 
 struct mlx5_vhca_data_buffer {
+	struct dma_iova_attrs iova;
 	struct page **page_list;
-	struct sg_append_table table;
 	loff_t start_pos;
 	u64 length;
 	u32 npages;
 	u32 mkey;
 	u32 *mkey_in;
-	enum dma_data_direction dma_dir;
 	u8 dmaed:1;
 	u8 stop_copy_chunk_num;
 	struct list_head buf_elm;
 	struct mlx5_vf_migration_file *migf;
-	/* Optimize mlx5vf_get_migration_page() for sequential access */
-	struct scatterlist *last_offset_sg;
-	unsigned int sg_last_entry;
-	unsigned long last_offset;
 };
 
 struct mlx5vf_async_data {
@@ -137,6 +132,7 @@ struct mlx5_vhca_cq {
 };
 
 struct mlx5_vhca_recv_buf {
+	struct dma_iova_attrs iova;
 	u32 npages;
 	struct page **page_list;
 	u32 next_rq_offset;
