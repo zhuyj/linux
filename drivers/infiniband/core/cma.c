@@ -2033,6 +2033,7 @@ static void _destroy_id(struct rdma_id_private *id_priv,
 
 	rdma_restrack_del(&id_priv->res);
 	cma_remove_id_from_tree(id_priv);
+	smp_mb();
 	if (id_priv->cma_dev) {
 		if (rdma_cap_ib_cm(id_priv->id.device, 1)) {
 			if (id_priv->cm_id.ib)
