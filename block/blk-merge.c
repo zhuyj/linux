@@ -583,6 +583,162 @@ int __blk_rq_map_sg(struct request_queue *q, struct request *rq,
 }
 EXPORT_SYMBOL(__blk_rq_map_sg);
 
+static dma_addr_t blk_dma_link_page(struct page *page, unsigned int page_offset,
+				    struct dma_iova_attrs *iova,
+				    dma_addr_t dma_offset)
+{
+	dma_addr_t dma_addr;
+	int ret;
+
+	dma_addr = dma_link_range(page, page_offset, iova, dma_offset);
+	ret = dma_mapping_error(iova->dev, dma_addr);
+	if (ret) {
+		pr_err("dma_mapping_err %d dma_addr 0x%llx dma_offset %llu\n",
+			ret, dma_addr, dma_offset);
+		/* better way ? */
+		dma_addr = 0;
+	}
+	return dma_addr;
+}
+
+/**
+ * blk_rq_dma_map: block layer request to DMA mapping helper.
+ *
+ * @req         : [in] request to be mapped
+ * @cb          : [in] callback to be called for each bvec mapped bvec into
+ *                     underlaying driver.
+ * @cb_data     : [in] callback data to be passed, privete to the underlaying
+ *                     driver.
+ * @iova        : [in] iova to be used to create DMA mapping for this request's
+ *                     bvecs.
+ * Description:
+ * Iterates through bvec list and create dma mapping between each bvec page
+ * using @iova with dma_link_range(). Note that @iova needs to be allocated and
+ * pre-initialized using dma_alloc_iova() by the caller. After creating
+ * a mapping for each page, call into the callback function @cb provided by
+ * driver with mapped dma address for this bvec, offset into iova space, length
+ * of the mapped page, and bvec number that is mapped in this requets. Driver is
+ * responsible for using this dma address to complete the mapping of underlaying
+ * protocol specific data structure, such as NVMe PRPs or NVMe SGLs. This
+ * callback approach allows us to iterate bvec list only once to create bvec to
+ * DMA mapping & use that dma address in the driver to build the protocol
+ * specific data structure, essentially mapping one bvec page at a time to DMA
+ * address and use that DMA address to create underlaying protocol specific
+ * data structure.
+ *
+ * Caller needs to ensure @iova is initialized & allovated with using
+ * dma_alloc_iova().
+ */
+int blk_rq_dma_map(struct request *req, driver_map_cb cb, void *cb_data,
+		   struct dma_iova_attrs *iova)
+{
+	dma_addr_t curr_dma_offset = 0;
+	dma_addr_t prev_dma_addr = 0;
+	dma_addr_t dma_addr;
+	size_t prev_dma_len = 0;
+	struct req_iterator iter;
+	struct bio_vec bv;
+	int linked_cnt = 0;
+
+	rq_for_each_bvec(bv, req, iter) {
+		if (bv.bv_offset + bv.bv_len <= PAGE_SIZE) {
+			curr_dma_offset = prev_dma_addr + prev_dma_len;
+
+			dma_addr = blk_dma_link_page(bv.bv_page, bv.bv_offset,
+						     iova, curr_dma_offset);
+			if (!dma_addr)
+				break;
+
+			cb(cb_data, linked_cnt, dma_addr, curr_dma_offset,
+			   bv.bv_len);
+
+			prev_dma_len = bv.bv_len;
+			prev_dma_addr = dma_addr;
+			linked_cnt++;
+		} else {
+			unsigned nbytes = bv.bv_len;
+			unsigned total = 0;
+			unsigned offset, len;
+
+			while (nbytes > 0) {
+				struct page *page = bv.bv_page;
+
+				offset = bv.bv_offset + total;
+				len = min(get_max_segment_size(&req->q->limits,
+							       page, offset),
+							       nbytes);
+
+				page += (offset >> PAGE_SHIFT);
+				offset &= ~PAGE_MASK;
+
+				curr_dma_offset = prev_dma_addr + prev_dma_len;
+
+				dma_addr = blk_dma_link_page(page, offset,
+							     iova,
+							     curr_dma_offset);
+				if (!dma_addr)
+					break;
+
+				cb(cb_data, linked_cnt, dma_addr,
+				   curr_dma_offset, len);
+
+				total += len;
+				nbytes -= len;
+
+				prev_dma_len = len;
+				prev_dma_addr = dma_addr;
+				linked_cnt++;
+			}
+		}
+	}
+	return linked_cnt;
+}
+EXPORT_SYMBOL_GPL(blk_rq_dma_map);
+
+/*
+ * Calculate total DMA length needed to satisfy this request.
+ */
+size_t blk_rq_get_dma_length(struct request *rq)
+{
+	struct request_queue *q = rq->q;
+	struct bio *bio = rq->bio;
+	unsigned int offset, len;
+	struct bvec_iter iter;
+	size_t dma_length = 0;
+	struct bio_vec bvec;
+
+	if (rq->rq_flags & RQF_SPECIAL_PAYLOAD)
+		return rq->special_vec.bv_len;
+
+	if (!rq->bio)
+		return 0;
+
+	for_each_bio(bio) {
+		bio_for_each_bvec(bvec, bio, iter) {
+			unsigned int nbytes = bvec.bv_len;
+			unsigned int total = 0;
+
+			if (bvec.bv_offset + bvec.bv_len <= PAGE_SIZE) {
+				dma_length += bvec.bv_len;
+				continue;
+			}
+
+			while (nbytes > 0) {
+				offset = bvec.bv_offset + total;
+				len = min(get_max_segment_size(&q->limits,
+							       bvec.bv_page,
+							       offset), nbytes);
+				total += len;
+				nbytes -= len;
+				dma_length += len;
+			}
+		}
+	}
+
+	return dma_length;
+}
+EXPORT_SYMBOL(blk_rq_get_dma_length);
+
 static inline unsigned int blk_rq_get_max_sectors(struct request *rq,
 						  sector_t offset)
 {

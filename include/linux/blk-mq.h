@@ -8,6 +8,7 @@
 #include <linux/scatterlist.h>
 #include <linux/prefetch.h>
 #include <linux/srcu.h>
+#include <linux/dma-mapping.h>
 
 struct blk_mq_tags;
 struct blk_flush_queue;
@@ -1144,7 +1145,15 @@ static inline int blk_rq_map_sg(struct request_queue *q, struct request *rq,
 
 	return __blk_rq_map_sg(q, rq, sglist, &last_sg);
 }
+
+typedef void (*driver_map_cb)(void *cb_data, u32 cnt, dma_addr_t dma_addr,
+			      dma_addr_t offset, u32 len);
+
+int blk_rq_dma_map(struct request *req, driver_map_cb cb, void *cb_data,
+		   struct dma_iova_attrs *iova);
+
 void blk_dump_rq_flags(struct request *, char *);
+size_t blk_rq_get_dma_length(struct request *rq);
 
 #ifdef CONFIG_BLK_DEV_ZONED
 static inline unsigned int blk_rq_zone_no(struct request *rq)
