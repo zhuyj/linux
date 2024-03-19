@@ -2392,11 +2392,24 @@ unlock_mutex:
 void *idpf_alloc_dma_mem(struct idpf_hw *hw, struct idpf_dma_mem *mem, u64 size)
 {
 	struct idpf_adapter *adapter = hw->back;
+	struct dma_iova_attrs iova;
 	size_t sz = ALIGN(size, 4096);
+	int ret;
 
 	mem->va = dma_alloc_coherent(&adapter->pdev->dev, sz,
 				     &mem->pa, GFP_KERNEL);
 	mem->size = sz;
+
+	/* Apply for io va */
+	iova.size = sz;
+	iova.dev = &adapter->pdev->dev;
+	ret = dma_alloc_iova(&iova);
+	if (ret) {
+		pr_err("errno: %d\n", ret);
+		return NULL;
+	}
+
+	/* Map the memory with iova */
 
 	return mem->va;
 }
