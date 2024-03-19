@@ -2393,11 +2393,14 @@ void *idpf_alloc_dma_mem(struct idpf_hw *hw, struct idpf_dma_mem *mem, u64 size)
 {
 	struct idpf_adapter *adapter = hw->back;
 	struct dma_iova_attrs iova;
+	struct page *page = NULL;
+	long long unsigned int offset = 0;
 	size_t sz = ALIGN(size, 4096);
 	int ret;
 
-	mem->va = dma_alloc_coherent(&adapter->pdev->dev, sz,
-				     &mem->pa, GFP_KERNEL);
+	/* make tests if idpf nic can work well */
+//	mem->va = dma_alloc_coherent(&adapter->pdev->dev, sz,
+//				     &mem->pa, GFP_KERNEL);
 	mem->size = sz;
 
 	/* Apply for io va */
@@ -2410,6 +2413,11 @@ void *idpf_alloc_dma_mem(struct idpf_hw *hw, struct idpf_dma_mem *mem, u64 size)
 	}
 
 	/* Map the memory with iova */
+	page = (struct page *)(mem->pa & PAGE_MASK);
+	offset = (uintptr_t)mem->pa - (uintptr_t)page;
+
+	/* make tests if this can work well */
+	mem->va = (void *)dma_link_range(page, offset, &iova, 0);
 
 	return mem->va;
 }
