@@ -7,11 +7,6 @@
 #ifndef RXE_H
 #define RXE_H
 
-#ifdef pr_fmt
-#undef pr_fmt
-#endif
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-
 #include <linux/skbuff.h>
 
 #include <rdma/ib_verbs.h>
@@ -29,6 +24,11 @@
 #include "rxe_param.h"
 #include "rxe_verbs.h"
 #include "rxe_loc.h"
+
+#ifdef pr_fmt
+#undef pr_fmt
+#endif
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 /*
  * Version 1 and Version 2 are identical on 64 bit machines, but on 32 bit
