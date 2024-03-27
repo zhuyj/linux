@@ -11,6 +11,7 @@
 #include <linux/kfifo.h>
 #include <linux/interrupt.h>
 #include <linux/dmaengine.h>
+#include <linux/workqueue.h>
 
 #define HIDMA_TRE_SIZE			32 /* each TRE is 32 bytes  */
 #define HIDMA_TRE_CFG_IDX		0
@@ -69,7 +70,7 @@ struct hidma_lldev {
 	u32 evre_processed_off;		/* last processed EVRE		   */
 
 	u32 tre_write_offset;           /* TRE write location              */
-	struct tasklet_struct task;	/* task delivering notifications   */
+	struct work_struct work;	/* work delivering notifications   */
 	DECLARE_KFIFO_PTR(handoff_fifo,
 		struct hidma_tre *);    /* pending TREs FIFO               */
 };
@@ -129,7 +130,7 @@ struct hidma_dev {
 	struct device_attribute		*chid_attrs;
 
 	/* Task delivering issue_pending */
-	struct tasklet_struct		task;
+	struct work_struct 		work;
 };
 
 int hidma_ll_request(struct hidma_lldev *llhndl, u32 dev_id,

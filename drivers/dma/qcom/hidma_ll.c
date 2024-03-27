@@ -16,6 +16,7 @@
 #include <linux/iopoll.h>
 #include <linux/kfifo.h>
 #include <linux/bitops.h>
+#include <linux/workqueue.h>
 
 #include "hidma.h"
 
@@ -173,9 +174,9 @@ int hidma_ll_request(struct hidma_lldev *lldev, u32 sig, const char *dev_name,
 /*
  * Multiple TREs may be queued and waiting in the pending queue.
  */
-static void hidma_ll_tre_complete(struct tasklet_struct *t)
+static void hidma_ll_tre_complete(struct work_struct *t)
 {
-	struct hidma_lldev *lldev = from_tasklet(lldev, t, task);
+	struct hidma_lldev *lldev = from_work(lldev, t, work);
 	struct hidma_tre *tre;
 
 	while (kfifo_out(&lldev->handoff_fifo, &tre, 1)) {
@@ -223,7 +224,7 @@ static int hidma_post_completed(struct hidma_lldev *lldev, u8 err_info,
 	tre->queued = 0;
 
 	kfifo_put(&lldev->handoff_fifo, tre);
-	tasklet_schedule(&lldev->task);
+	queue_work(system_bh_wq, &lldev->work);
 
 	return 0;
 }
@@ -792,7 +793,7 @@ struct hidma_lldev *hidma_ll_init(struct device *dev, u32 nr_tres,
 		return NULL;
 
 	spin_lock_init(&lldev->lock);
-	tasklet_setup(&lldev->task, hidma_ll_tre_complete);
+	INIT_WORK(&lldev->work, hidma_ll_tre_complete);
 	lldev->initialized = 1;
 	writel(ENABLE_IRQS, lldev->evca + HIDMA_EVCA_IRQ_EN_REG);
 	return lldev;
@@ -813,7 +814,7 @@ int hidma_ll_uninit(struct hidma_lldev *lldev)
 	lldev->initialized = 0;
 
 	required_bytes = sizeof(struct hidma_tre) * lldev->nr_tres;
-	tasklet_kill(&lldev->task);
+	cancel_work_sync(&lldev->work);
 	memset(lldev->trepool, 0, required_bytes);
 	lldev->trepool = NULL;
 	atomic_set(&lldev->pending_tre_count, 0);

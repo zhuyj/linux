@@ -20,6 +20,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/pm_runtime.h>
+#include <linux/workqueue.h>
 
 #include "../dmaengine.h"
 #include "internal.h"
@@ -181,7 +182,7 @@ static void dwc_dostart(struct dw_dma_chan *dwc, struct dw_desc *first)
 			__func__);
 		dwc_dump_chan_regs(dwc);
 
-		/* The tasklet will hopefully advance the queue... */
+		/* The work will hopefully advance the queue... */
 		return;
 	}
 
@@ -460,9 +461,9 @@ static void dwc_handle_error(struct dw_dma *dw, struct dw_dma_chan *dwc)
 	dwc_descriptor_complete(dwc, bad_desc, true);
 }
 
-static void dw_dma_tasklet(struct tasklet_struct *t)
+static void dw_dma_work(struct work_struct *t)
 {
-	struct dw_dma *dw = from_tasklet(dw, t, tasklet);
+	struct dw_dma *dw = from_work(dw, t, work);
 	struct dw_dma_chan *dwc;
 	u32 status_xfer;
 	u32 status_err;
@@ -526,7 +527,7 @@ static irqreturn_t dw_dma_interrupt(int irq, void *dev_id)
 		channel_clear_bit(dw, MASK.ERROR, (1 << 8) - 1);
 	}
 
-	tasklet_schedule(&dw->tasklet);
+	queue_work(system_bh_wq, &dw->work);
 
 	return IRQ_HANDLED;
 }
@@ -1138,7 +1139,7 @@ int do_dma_probe(struct dw_dma_chip *chip)
 		goto err_pdata;
 	}
 
-	tasklet_setup(&dw->tasklet, dw_dma_tasklet);
+	INIT_WORK(&dw->work, dw_dma_work);
 
 	err = request_irq(chip->irq, dw_dma_interrupt, IRQF_SHARED,
 			  dw->name, dw);
@@ -1283,7 +1284,7 @@ int do_dma_remove(struct dw_dma_chip *chip)
 	dma_async_device_unregister(&dw->dma);
 
 	free_irq(chip->irq, dw);
-	tasklet_kill(&dw->tasklet);
+	cancel_work_sync(&dw->work);
 
 	list_for_each_entry_safe(dwc, _dwc, &dw->dma.channels,
 			chan.device_node) {

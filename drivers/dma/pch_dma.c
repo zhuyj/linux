@@ -13,6 +13,7 @@
 #include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/pch_dma.h>
+#include <linux/workqueue.h>
 
 #include "dmaengine.h"
 
@@ -91,7 +92,7 @@ struct pch_dma_chan {
 	struct dma_chan		chan;
 	void __iomem *membase;
 	enum dma_transfer_direction dir;
-	struct tasklet_struct	tasklet;
+	struct work_struct 	work;
 	unsigned long		err_status;
 
 	spinlock_t		lock;
@@ -670,14 +671,14 @@ static int pd_device_terminate_all(struct dma_chan *chan)
 	return 0;
 }
 
-static void pdc_tasklet(struct tasklet_struct *t)
+static void pdc_work(struct work_struct *t)
 {
-	struct pch_dma_chan *pd_chan = from_tasklet(pd_chan, t, tasklet);
+	struct pch_dma_chan *pd_chan = from_work(pd_chan, t, work);
 	unsigned long flags;
 
 	if (!pdc_is_idle(pd_chan)) {
 		dev_err(chan2dev(&pd_chan->chan),
-			"BUG: handle non-idle channel in tasklet\n");
+			"BUG: handle non-idle channel in work\n");
 		return;
 	}
 
@@ -712,7 +713,7 @@ static irqreturn_t pd_irq(int irq, void *devid)
 				if (sts0 & DMA_STATUS0_ERR(i))
 					set_bit(0, &pd_chan->err_status);
 
-				tasklet_schedule(&pd_chan->tasklet);
+				queue_work(system_bh_wq, &pd_chan->work);
 				ret0 = IRQ_HANDLED;
 			}
 		} else {
@@ -720,7 +721,7 @@ static irqreturn_t pd_irq(int irq, void *devid)
 				if (sts2 & DMA_STATUS2_ERR(i))
 					set_bit(0, &pd_chan->err_status);
 
-				tasklet_schedule(&pd_chan->tasklet);
+				queue_work(system_bh_wq, &pd_chan->work);
 				ret2 = IRQ_HANDLED;
 			}
 		}
@@ -882,7 +883,7 @@ static int pch_dma_probe(struct pci_dev *pdev,
 		INIT_LIST_HEAD(&pd_chan->queue);
 		INIT_LIST_HEAD(&pd_chan->free_list);
 
-		tasklet_setup(&pd_chan->tasklet, pdc_tasklet);
+		INIT_WORK(&pd_chan->work, pdc_work);
 		list_add_tail(&pd_chan->chan.device_node, &pd->dma.channels);
 	}
 
@@ -935,7 +936,7 @@ static void pch_dma_remove(struct pci_dev *pdev)
 					 device_node) {
 			pd_chan = to_pd_chan(chan);
 
-			tasklet_kill(&pd_chan->tasklet);
+			cancel_work_sync(&pd_chan->work);
 		}
 
 		dma_pool_destroy(pd->pool);

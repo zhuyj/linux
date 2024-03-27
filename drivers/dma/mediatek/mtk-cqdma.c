@@ -23,6 +23,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/refcount.h>
 #include <linux/slab.h>
+#include <linux/workqueue.h>
 
 #include "../virt-dma.h"
 
@@ -94,7 +95,7 @@ struct mtk_cqdma_vdesc {
  * @base:                  The mapped register I/O base of this PC
  * @irq:                   The IRQ that this PC are using
  * @refcnt:                Track how many VCs are using this PC
- * @tasklet:               Tasklet for this PC
+ * @work:               Work for this PC
  * @lock:                  Lock protect agaisting multiple VCs access PC
  */
 struct mtk_cqdma_pchan {
@@ -104,7 +105,7 @@ struct mtk_cqdma_pchan {
 
 	refcount_t refcnt;
 
-	struct tasklet_struct tasklet;
+	struct work_struct work;
 
 	/* lock to protect PC */
 	spinlock_t lock;
@@ -355,9 +356,9 @@ static struct mtk_cqdma_vdesc
 	return ret;
 }
 
-static void mtk_cqdma_tasklet_cb(struct tasklet_struct *t)
+static void mtk_cqdma_work_cb(struct work_struct *t)
 {
-	struct mtk_cqdma_pchan *pc = from_tasklet(pc, t, tasklet);
+	struct mtk_cqdma_pchan *pc = from_work(pc, t, work);
 	struct mtk_cqdma_vdesc *cvd = NULL;
 	unsigned long flags;
 
@@ -378,7 +379,7 @@ static void mtk_cqdma_tasklet_cb(struct tasklet_struct *t)
 			kfree(cvd);
 	}
 
-	/* re-enable interrupt before leaving tasklet */
+	/* re-enable interrupt before leaving work */
 	enable_irq(pc->irq);
 }
 
@@ -386,11 +387,11 @@ static irqreturn_t mtk_cqdma_irq(int irq, void *devid)
 {
 	struct mtk_cqdma_device *cqdma = devid;
 	irqreturn_t ret = IRQ_NONE;
-	bool schedule_tasklet = false;
+	bool schedule_work = false;
 	u32 i;
 
 	/* clear interrupt flags for each PC */
-	for (i = 0; i < cqdma->dma_channels; ++i, schedule_tasklet = false) {
+	for (i = 0; i < cqdma->dma_channels; ++i, schedule_work = false) {
 		spin_lock(&cqdma->pc[i]->lock);
 		if (mtk_dma_read(cqdma->pc[i],
 				 MTK_CQDMA_INT_FLAG) & MTK_CQDMA_INT_FLAG_BIT) {
@@ -398,17 +399,17 @@ static irqreturn_t mtk_cqdma_irq(int irq, void *devid)
 			mtk_dma_clr(cqdma->pc[i], MTK_CQDMA_INT_FLAG,
 				    MTK_CQDMA_INT_FLAG_BIT);
 
-			schedule_tasklet = true;
+			schedule_work = true;
 			ret = IRQ_HANDLED;
 		}
 		spin_unlock(&cqdma->pc[i]->lock);
 
-		if (schedule_tasklet) {
+		if (schedule_work) {
 			/* disable interrupt */
 			disable_irq_nosync(cqdma->pc[i]->irq);
 
-			/* schedule the tasklet to handle the transactions */
-			tasklet_schedule(&cqdma->pc[i]->tasklet);
+			/* schedule the work to handle the transactions */
+			queue_work(system_bh_wq, &cqdma->pc[i]->work);
 		}
 	}
 
@@ -472,7 +473,7 @@ static void mtk_cqdma_issue_pending(struct dma_chan *c)
 	unsigned long pc_flags;
 	unsigned long vc_flags;
 
-	/* acquire PC's lock before VS's lock for lock dependency in tasklet */
+	/* acquire PC's lock before VS's lock for lock dependency in work */
 	spin_lock_irqsave(&cvc->pc->lock, pc_flags);
 	spin_lock_irqsave(&cvc->vc.lock, vc_flags);
 
@@ -871,9 +872,9 @@ static int mtk_cqdma_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, cqdma);
 
-	/* initialize tasklet for each PC */
+	/* initialize work for each PC */
 	for (i = 0; i < cqdma->dma_channels; ++i)
-		tasklet_setup(&cqdma->pc[i]->tasklet, mtk_cqdma_tasklet_cb);
+		INIT_WORK(&cqdma->pc[i]->work, mtk_cqdma_work_cb);
 
 	dev_info(&pdev->dev, "MediaTek CQDMA driver registered\n");
 
@@ -892,12 +893,12 @@ static void mtk_cqdma_remove(struct platform_device *pdev)
 	unsigned long flags;
 	int i;
 
-	/* kill VC task */
+	/* kill VC work */
 	for (i = 0; i < cqdma->dma_requests; i++) {
 		vc = &cqdma->vc[i];
 
 		list_del(&vc->vc.chan.device_node);
-		tasklet_kill(&vc->vc.task);
+		cancel_work_sync(&vc->vc.work);
 	}
 
 	/* disable interrupt */
@@ -910,7 +911,7 @@ static void mtk_cqdma_remove(struct platform_device *pdev)
 		/* Waits for any pending IRQ handlers to complete */
 		synchronize_irq(cqdma->pc[i]->irq);
 
-		tasklet_kill(&cqdma->pc[i]->tasklet);
+		cancel_work_sync(&cqdma->pc[i]->work);
 	}
 
 	/* disable hardware */

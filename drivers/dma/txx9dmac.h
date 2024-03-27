@@ -8,6 +8,7 @@
 #define TXX9DMAC_H
 
 #include <linux/dmaengine.h>
+#include <linux/workqueue.h>
 #include <asm/txx9/dmac.h>
 
 /*
@@ -162,7 +163,7 @@ struct txx9dmac_chan {
 	struct dma_device	dma;
 	struct txx9dmac_dev	*ddev;
 	void __iomem		*ch_regs;
-	struct tasklet_struct	tasklet;
+	struct work_struct 	work;
 	int			irq;
 	u32			ccr;
 
@@ -178,7 +179,7 @@ struct txx9dmac_chan {
 
 struct txx9dmac_dev {
 	void __iomem		*regs;
-	struct tasklet_struct	tasklet;
+	struct work_struct 	work;
 	int			irq;
 	struct txx9dmac_chan	*chan[TXX9_DMA_MAX_NR_CHANNELS];
 	bool			have_64bit_regs;

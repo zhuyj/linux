@@ -24,6 +24,7 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/wait.h>
+#include <linux/workqueue.h>
 
 #include <dt-bindings/dma/xlnx-zynqmp-dpdma.h>
 
@@ -234,7 +235,7 @@ struct xilinx_dpdma_chan {
 
 	spinlock_t lock; /* lock to access struct xilinx_dpdma_chan */
 	struct dma_pool *desc_pool;
-	struct tasklet_struct err_task;
+	struct work_struct err_task;
 
 	struct {
 		struct xilinx_dpdma_tx_desc *pending;
@@ -1396,7 +1397,7 @@ static void xilinx_dpdma_synchronize(struct dma_chan *dchan)
 }
 
 /* -----------------------------------------------------------------------------
- * Interrupt and Tasklet Handling
+ * Interrupt and Work Handling
  */
 
 /**
@@ -1443,7 +1444,7 @@ static void xilinx_dpdma_handle_err_irq(struct xilinx_dpdma_device *xdev,
 
 	for (i = 0; i < ARRAY_SIZE(xdev->chan); i++)
 		if (err || xilinx_dpdma_chan_err(xdev->chan[i], isr, eisr))
-			tasklet_schedule(&xdev->chan[i]->err_task);
+			queue_work(system_bh_wq, &xdev->chan[i]->err_task);
 }
 
 /**
@@ -1471,16 +1472,16 @@ static void xilinx_dpdma_disable_irq(struct xilinx_dpdma_device *xdev)
 }
 
 /**
- * xilinx_dpdma_chan_err_task - Per channel tasklet for error handling
- * @t: pointer to the tasklet associated with this handler
+ * xilinx_dpdma_chan_err_task - Per channel work for error handling
+ * @t: pointer to the work associated with this handler
  *
- * Per channel error handling tasklet. This function waits for the outstanding
+ * Per channel error handling work. This function waits for the outstanding
  * transaction to complete and triggers error handling. After error handling,
  * re-enable channel error interrupts, and restart the channel if needed.
  */
-static void xilinx_dpdma_chan_err_task(struct tasklet_struct *t)
+static void xilinx_dpdma_chan_err_task(struct work_struct *t)
 {
-	struct xilinx_dpdma_chan *chan = from_tasklet(chan, t, err_task);
+	struct xilinx_dpdma_chan *chan = from_work(chan, t, err_task);
 	struct xilinx_dpdma_device *xdev = chan->xdev;
 	unsigned long flags;
 
@@ -1569,7 +1570,7 @@ static int xilinx_dpdma_chan_init(struct xilinx_dpdma_device *xdev,
 	spin_lock_init(&chan->lock);
 	init_waitqueue_head(&chan->wait_to_stop);
 
-	tasklet_setup(&chan->err_task, xilinx_dpdma_chan_err_task);
+	INIT_WORK(&chan->err_task, xilinx_dpdma_chan_err_task);
 
 	chan->vchan.desc_free = xilinx_dpdma_chan_free_tx_desc;
 	vchan_init(&chan->vchan, &xdev->common);
@@ -1584,7 +1585,7 @@ static void xilinx_dpdma_chan_remove(struct xilinx_dpdma_chan *chan)
 	if (!chan)
 		return;
 
-	tasklet_kill(&chan->err_task);
+	cancel_work_sync(&chan->err_task);
 	list_del(&chan->vchan.chan.device_node);
 }
 

@@ -26,6 +26,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/bug.h>
 #include <linux/reset.h>
+#include <linux/workqueue.h>
 
 #include "dmaengine.h"
 #define PL330_MAX_CHAN		8
@@ -360,7 +361,7 @@ struct _pl330_req {
 	struct dma_pl330_desc *desc;
 };
 
-/* ToBeDone for tasklet */
+/* ToBeDone for work */
 struct _pl330_tbd {
 	bool reset_dmac;
 	bool reset_mngr;
@@ -418,7 +419,7 @@ enum desc_status {
 
 struct dma_pl330_chan {
 	/* Schedule desc completion */
-	struct tasklet_struct task;
+	struct work_struct work;
 
 	/* DMA-Engine Channel */
 	struct dma_chan chan;
@@ -490,7 +491,7 @@ struct pl330_dmac {
 	/* Pointer to the MANAGER thread */
 	struct pl330_thread	*manager;
 	/* To handle bad news in interrupt */
-	struct tasklet_struct	tasks;
+	struct work_struct 	tasks;
 	struct _pl330_tbd	dmac_tbd;
 	/* State of DMAC operation */
 	enum pl330_dmac_state	state;
@@ -1577,12 +1578,12 @@ static void dma_pl330_rqcb(struct dma_pl330_desc *desc, enum pl330_op_err err)
 
 	spin_unlock_irqrestore(&pch->lock, flags);
 
-	tasklet_schedule(&pch->task);
+	queue_work(system_bh_wq, &pch->work);
 }
 
-static void pl330_dotask(struct tasklet_struct *t)
+static void pl330_dotask(struct work_struct *t)
 {
-	struct pl330_dmac *pl330 = from_tasklet(pl330, t, tasks);
+	struct pl330_dmac *pl330 = from_work(pl330, t, tasks);
 	unsigned long flags;
 	int i;
 
@@ -1735,7 +1736,7 @@ updt_exit:
 			|| pl330->dmac_tbd.reset_mngr
 			|| pl330->dmac_tbd.reset_chan) {
 		ret = 1;
-		tasklet_schedule(&pl330->tasks);
+		queue_work(system_bh_wq, &pl330->tasks);
 	}
 
 	return ret;
@@ -1986,7 +1987,7 @@ static int pl330_add(struct pl330_dmac *pl330)
 		return ret;
 	}
 
-	tasklet_setup(&pl330->tasks, pl330_dotask);
+	INIT_WORK(&pl330->tasks, pl330_dotask);
 
 	pl330->state = INIT;
 
@@ -2014,7 +2015,7 @@ static void pl330_del(struct pl330_dmac *pl330)
 {
 	pl330->state = UNINIT;
 
-	tasklet_kill(&pl330->tasks);
+	cancel_work_sync(&pl330->tasks);
 
 	/* Free DMAC resources */
 	dmac_free_threads(pl330);
@@ -2064,14 +2065,14 @@ static inline void fill_queue(struct dma_pl330_chan *pch)
 			desc->status = DONE;
 			dev_err(pch->dmac->ddma.dev, "%s:%d Bad Desc(%d)\n",
 					__func__, __LINE__, desc->txd.cookie);
-			tasklet_schedule(&pch->task);
+			queue_work(system_bh_wq, &pch->work);
 		}
 	}
 }
 
-static void pl330_tasklet(struct tasklet_struct *t)
+static void pl330_work(struct work_struct *t)
 {
-	struct dma_pl330_chan *pch = from_tasklet(pch, t, task);
+	struct dma_pl330_chan *pch = from_work(pch, t, work);
 	struct dma_pl330_desc *desc, *_dt;
 	unsigned long flags;
 	bool power_down = false;
@@ -2179,7 +2180,7 @@ static int pl330_alloc_chan_resources(struct dma_chan *chan)
 		return -ENOMEM;
 	}
 
-	tasklet_setup(&pch->task, pl330_tasklet);
+	INIT_WORK(&pch->work, pl330_work);
 
 	spin_unlock_irqrestore(&pl330->lock, flags);
 
@@ -2362,7 +2363,7 @@ static void pl330_free_chan_resources(struct dma_chan *chan)
 	struct pl330_dmac *pl330 = pch->dmac;
 	unsigned long flags;
 
-	tasklet_kill(&pch->task);
+	cancel_work_sync(&pch->work);
 
 	pm_runtime_get_sync(pch->dmac->ddma.dev);
 	spin_lock_irqsave(&pl330->lock, flags);
@@ -2499,7 +2500,7 @@ static void pl330_issue_pending(struct dma_chan *chan)
 	list_splice_tail_init(&pch->submitted_list, &pch->work_list);
 	spin_unlock_irqrestore(&pch->lock, flags);
 
-	pl330_tasklet(&pch->task);
+	pl330_work(&pch->work);
 }
 
 /*

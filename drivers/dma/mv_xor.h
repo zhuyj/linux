@@ -10,6 +10,7 @@
 #include <linux/io.h>
 #include <linux/dmaengine.h>
 #include <linux/interrupt.h>
+#include <linux/workqueue.h>
 
 #define MV_XOR_POOL_SIZE		(MV_XOR_SLOT_SIZE * 3072)
 #define MV_XOR_SLOT_SIZE		64
@@ -98,7 +99,7 @@ struct mv_xor_device {
  * @device: parent device
  * @common: common dmaengine channel object members
  * @slots_allocated: records the actual size of the descriptor slot pool
- * @irq_tasklet: bottom half where mv_xor_slot_cleanup runs
+ * @irq_work: bottom half where mv_xor_slot_cleanup runs
  * @op_in_desc: new mode of driver, each op is writen to descriptor.
  */
 struct mv_xor_chan {
@@ -118,7 +119,7 @@ struct mv_xor_chan {
 	struct dma_device	dmadev;
 	struct dma_chan		dmachan;
 	int			slots_allocated;
-	struct tasklet_struct	irq_tasklet;
+	struct work_struct 	irq_work;
 	int                     op_in_desc;
 	char			dummy_src[MV_XOR_MIN_BYTE_COUNT];
 	char			dummy_dst[MV_XOR_MIN_BYTE_COUNT];

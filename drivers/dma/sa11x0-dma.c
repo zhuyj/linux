@@ -16,6 +16,7 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/workqueue.h>
 
 #include "virt-dma.h"
 
@@ -118,7 +119,7 @@ struct sa11x0_dma_dev {
 	struct dma_device	slave;
 	void __iomem		*base;
 	spinlock_t		lock;
-	struct tasklet_struct	task;
+	struct work_struct 	work;
 	struct list_head	chan_pending;
 	struct sa11x0_dma_phy	phy[NR_PHY_CHAN];
 };
@@ -232,7 +233,7 @@ static void noinline sa11x0_dma_complete(struct sa11x0_dma_phy *p,
 			p->txd_done = p->txd_load;
 
 			if (!p->txd_done)
-				tasklet_schedule(&p->dev->task);
+				queue_work(system_bh_wq, &p->dev->work);
 		} else {
 			if ((p->sg_done % txd->period) == 0)
 				vchan_cyclic_callback(&txd->vd);
@@ -323,14 +324,14 @@ static void sa11x0_dma_start_txd(struct sa11x0_dma_chan *c)
 	}
 }
 
-static void sa11x0_dma_tasklet(struct tasklet_struct *t)
+static void sa11x0_dma_work(struct work_struct *t)
 {
-	struct sa11x0_dma_dev *d = from_tasklet(d, t, task);
+	struct sa11x0_dma_dev *d = from_work(d, t, work);
 	struct sa11x0_dma_phy *p;
 	struct sa11x0_dma_chan *c;
 	unsigned pch, pch_alloc = 0;
 
-	dev_dbg(d->slave.dev, "tasklet enter\n");
+	dev_dbg(d->slave.dev, "work enter\n");
 
 	list_for_each_entry(c, &d->slave.channels, vc.chan.device_node) {
 		spin_lock_irq(&c->vc.lock);
@@ -381,7 +382,7 @@ static void sa11x0_dma_tasklet(struct tasklet_struct *t)
 		}
 	}
 
-	dev_dbg(d->slave.dev, "tasklet exit\n");
+	dev_dbg(d->slave.dev, "work exit\n");
 }
 
 
@@ -495,7 +496,7 @@ static enum dma_status sa11x0_dma_tx_status(struct dma_chan *chan,
 /*
  * Move pending txds to the issued list, and re-init pending list.
  * If not already pending, add this channel to the list of pending
- * channels and trigger the tasklet to run.
+ * channels and trigger the work to run.
  */
 static void sa11x0_dma_issue_pending(struct dma_chan *chan)
 {
@@ -509,7 +510,7 @@ static void sa11x0_dma_issue_pending(struct dma_chan *chan)
 			spin_lock(&d->lock);
 			if (list_empty(&c->node)) {
 				list_add_tail(&c->node, &d->chan_pending);
-				tasklet_schedule(&d->task);
+				queue_work(system_bh_wq, &d->work);
 				dev_dbg(d->slave.dev, "vchan %p: issued\n", &c->vc);
 			}
 			spin_unlock(&d->lock);
@@ -784,7 +785,7 @@ static int sa11x0_dma_device_terminate_all(struct dma_chan *chan)
 		spin_lock(&d->lock);
 		p->vchan = NULL;
 		spin_unlock(&d->lock);
-		tasklet_schedule(&d->task);
+		queue_work(system_bh_wq, &d->work);
 	}
 	spin_unlock_irqrestore(&c->vc.lock, flags);
 	vchan_dma_desc_free_list(&c->vc, &head);
@@ -893,7 +894,7 @@ static void sa11x0_dma_free_channels(struct dma_device *dmadev)
 
 	list_for_each_entry_safe(c, cn, &dmadev->channels, vc.chan.device_node) {
 		list_del(&c->vc.chan.device_node);
-		tasklet_kill(&c->vc.task);
+		cancel_work_sync(&c->vc.work);
 		kfree(c);
 	}
 }
@@ -928,7 +929,7 @@ static int sa11x0_dma_probe(struct platform_device *pdev)
 		goto err_ioremap;
 	}
 
-	tasklet_setup(&d->task, sa11x0_dma_tasklet);
+	INIT_WORK(&d->work, sa11x0_dma_work);
 
 	for (i = 0; i < NR_PHY_CHAN; i++) {
 		struct sa11x0_dma_phy *p = &d->phy[i];
@@ -976,7 +977,7 @@ static int sa11x0_dma_probe(struct platform_device *pdev)
 	for (i = 0; i < NR_PHY_CHAN; i++)
 		sa11x0_dma_free_irq(pdev, i, &d->phy[i]);
  err_irq:
-	tasklet_kill(&d->task);
+	cancel_work_sync(&d->work);
 	iounmap(d->base);
  err_ioremap:
 	kfree(d);
@@ -994,7 +995,7 @@ static void sa11x0_dma_remove(struct platform_device *pdev)
 	sa11x0_dma_free_channels(&d->slave);
 	for (pch = 0; pch < NR_PHY_CHAN; pch++)
 		sa11x0_dma_free_irq(pdev, pch, &d->phy[pch]);
-	tasklet_kill(&d->task);
+	cancel_work_sync(&d->work);
 	iounmap(d->base);
 	kfree(d);
 }

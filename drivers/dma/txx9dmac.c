@@ -12,6 +12,7 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/scatterlist.h>
+#include <linux/workqueue.h>
 
 #include "dmaengine.h"
 #include "txx9dmac.h"
@@ -340,7 +341,7 @@ static void txx9dmac_dostart(struct txx9dmac_chan *dc,
 		dev_err(chan2dev(&dc->chan),
 			"BUG: Attempted to start non-idle channel\n");
 		txx9dmac_dump_regs(dc);
-		/* The tasklet will hopefully advance the queue... */
+		/* The work will hopefully advance the queue... */
 		return;
 	}
 
@@ -601,15 +602,15 @@ scan_done:
 	}
 }
 
-static void txx9dmac_chan_tasklet(struct tasklet_struct *t)
+static void txx9dmac_chan_work(struct work_struct *t)
 {
 	int irq;
 	u32 csr;
 	struct txx9dmac_chan *dc;
 
-	dc = from_tasklet(dc, t, tasklet);
+	dc = from_work(dc, t, work);
 	csr = channel_readl(dc, CSR);
-	dev_vdbg(chan2dev(&dc->chan), "tasklet: status=%x\n", csr);
+	dev_vdbg(chan2dev(&dc->chan), "work: status=%x\n", csr);
 
 	spin_lock(&dc->lock);
 	if (csr & (TXX9_DMA_CSR_ABCHC | TXX9_DMA_CSR_NCHNC |
@@ -628,7 +629,7 @@ static irqreturn_t txx9dmac_chan_interrupt(int irq, void *dev_id)
 	dev_vdbg(chan2dev(&dc->chan), "interrupt: status=%#x\n",
 			channel_readl(dc, CSR));
 
-	tasklet_schedule(&dc->tasklet);
+	queue_work(system_bh_wq, &dc->work);
 	/*
 	 * Just disable the interrupts. We'll turn them back on in the
 	 * softirq handler.
@@ -638,23 +639,23 @@ static irqreturn_t txx9dmac_chan_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static void txx9dmac_tasklet(struct tasklet_struct *t)
+static void txx9dmac_work(struct work_struct *t)
 {
 	int irq;
 	u32 csr;
 	struct txx9dmac_chan *dc;
 
-	struct txx9dmac_dev *ddev = from_tasklet(ddev, t, tasklet);
+	struct txx9dmac_dev *ddev = from_work(ddev, t, work);
 	u32 mcr;
 	int i;
 
 	mcr = dma_readl(ddev, MCR);
-	dev_vdbg(ddev->chan[0]->dma.dev, "tasklet: mcr=%x\n", mcr);
+	dev_vdbg(ddev->chan[0]->dma.dev, "work: mcr=%x\n", mcr);
 	for (i = 0; i < TXX9_DMA_MAX_NR_CHANNELS; i++) {
 		if ((mcr >> (24 + i)) & 0x11) {
 			dc = ddev->chan[i];
 			csr = channel_readl(dc, CSR);
-			dev_vdbg(chan2dev(&dc->chan), "tasklet: status=%x\n",
+			dev_vdbg(chan2dev(&dc->chan), "work: status=%x\n",
 				 csr);
 			spin_lock(&dc->lock);
 			if (csr & (TXX9_DMA_CSR_ABCHC | TXX9_DMA_CSR_NCHNC |
@@ -675,7 +676,7 @@ static irqreturn_t txx9dmac_interrupt(int irq, void *dev_id)
 	dev_vdbg(ddev->chan[0]->dma.dev, "interrupt: status=%#x\n",
 			dma_readl(ddev, MCR));
 
-	tasklet_schedule(&ddev->tasklet);
+	queue_work(system_bh_wq, &ddev->work);
 	/*
 	 * Just disable the interrupts. We'll turn them back on in the
 	 * softirq handler.
@@ -1113,7 +1114,7 @@ static int __init txx9dmac_chan_probe(struct platform_device *pdev)
 		irq = platform_get_irq(pdev, 0);
 		if (irq < 0)
 			return irq;
-		tasklet_setup(&dc->tasklet, txx9dmac_chan_tasklet);
+		INIT_WORK(&dc->work, txx9dmac_chan_work);
 		dc->irq = irq;
 		err = devm_request_irq(&pdev->dev, dc->irq,
 			txx9dmac_chan_interrupt, 0, dev_name(&pdev->dev), dc);
@@ -1159,7 +1160,7 @@ static void txx9dmac_chan_remove(struct platform_device *pdev)
 	dma_async_device_unregister(&dc->dma);
 	if (dc->irq >= 0) {
 		devm_free_irq(&pdev->dev, dc->irq, dc);
-		tasklet_kill(&dc->tasklet);
+		cancel_work_sync(&dc->work);
 	}
 	dc->ddev->chan[pdev->id % TXX9_DMA_MAX_NR_CHANNELS] = NULL;
 }
@@ -1198,7 +1199,7 @@ static int __init txx9dmac_probe(struct platform_device *pdev)
 
 	ddev->irq = platform_get_irq(pdev, 0);
 	if (ddev->irq >= 0) {
-		tasklet_setup(&ddev->tasklet, txx9dmac_tasklet);
+		INIT_WORK(&ddev->work, txx9dmac_work);
 		err = devm_request_irq(&pdev->dev, ddev->irq,
 			txx9dmac_interrupt, 0, dev_name(&pdev->dev), ddev);
 		if (err)
@@ -1221,7 +1222,7 @@ static void txx9dmac_remove(struct platform_device *pdev)
 	txx9dmac_off(ddev);
 	if (ddev->irq >= 0) {
 		devm_free_irq(&pdev->dev, ddev->irq, ddev);
-		tasklet_kill(&ddev->tasklet);
+		cancel_work_sync(&ddev->work);
 	}
 }
 

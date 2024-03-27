@@ -18,6 +18,7 @@
 
 #include <linux/dmaengine.h>
 #include <linux/dma-direction.h>
+#include <linux/workqueue.h>
 
 #include "../dmaengine.h"
 #include "../virt-dma.h"
@@ -99,8 +100,8 @@ struct sf_pdma_chan {
 	u32				attr;
 	dma_addr_t			dma_dev_addr;
 	u32				dma_dev_size;
-	struct tasklet_struct		done_tasklet;
-	struct tasklet_struct		err_tasklet;
+	struct work_struct 		done_work;
+	struct work_struct 		err_work;
 	struct pdma_regs		regs;
 	spinlock_t			lock; /* protect chan data */
 	bool				xfer_err;

@@ -33,6 +33,7 @@
 #include <linux/of_irq.h>
 #include <linux/platform_device.h>
 #include <linux/fsldma.h>
+#include <linux/workqueue.h>
 #include "dmaengine.h"
 #include "fsldma.h"
 
@@ -968,20 +969,20 @@ static irqreturn_t fsldma_chan_irq(int irq, void *data)
 		chan_err(chan, "irq: unhandled sr 0x%08x\n", stat);
 
 	/*
-	 * Schedule the tasklet to handle all cleanup of the current
+	 * Schedule the work to handle all cleanup of the current
 	 * transaction. It will start a new transaction if there is
 	 * one pending.
 	 */
-	tasklet_schedule(&chan->tasklet);
+	queue_work(system_bh_wq, &chan->work);
 	chan_dbg(chan, "irq: Exit\n");
 	return IRQ_HANDLED;
 }
 
-static void dma_do_tasklet(struct tasklet_struct *t)
+static void dma_do_work(struct work_struct *t)
 {
-	struct fsldma_chan *chan = from_tasklet(chan, t, tasklet);
+	struct fsldma_chan *chan = from_work(chan, t, work);
 
-	chan_dbg(chan, "tasklet entry\n");
+	chan_dbg(chan, "work entry\n");
 
 	spin_lock(&chan->desc_lock);
 
@@ -993,7 +994,7 @@ static void dma_do_tasklet(struct tasklet_struct *t)
 
 	spin_unlock(&chan->desc_lock);
 
-	chan_dbg(chan, "tasklet exit\n");
+	chan_dbg(chan, "work exit\n");
 }
 
 static irqreturn_t fsldma_ctrl_irq(int irq, void *data)
@@ -1152,7 +1153,7 @@ static int fsl_dma_chan_probe(struct fsldma_device *fdev,
 	}
 
 	fdev->chan[chan->id] = chan;
-	tasklet_setup(&chan->tasklet, dma_do_tasklet);
+	INIT_WORK(&chan->work, dma_do_work);
 	snprintf(chan->name, sizeof(chan->name), "chan%d", chan->id);
 
 	/* Initialize the channel */

@@ -48,6 +48,7 @@
 #include <linux/slab.h>
 #include <linux/clk.h>
 #include <linux/io-64-nonatomic-lo-hi.h>
+#include <linux/workqueue.h>
 
 #include "../dmaengine.h"
 
@@ -400,7 +401,7 @@ struct xilinx_dma_tx_descriptor {
  * @err: Channel has errors
  * @idle: Check for channel idle
  * @terminating: Check for channel being synchronized by user
- * @tasklet: Cleanup work after irq
+ * @work: Cleanup work after irq
  * @config: Device configuration info
  * @flush_on_fsync: Flush on Frame sync
  * @desc_pendingcount: Descriptor pending count
@@ -439,7 +440,7 @@ struct xilinx_dma_chan {
 	bool err;
 	bool idle;
 	bool terminating;
-	struct tasklet_struct tasklet;
+	struct work_struct work;
 	struct xilinx_vdma_config config;
 	bool flush_on_fsync;
 	u32 desc_pendingcount;
@@ -1094,12 +1095,12 @@ static void xilinx_dma_chan_desc_cleanup(struct xilinx_dma_chan *chan)
 }
 
 /**
- * xilinx_dma_do_tasklet - Schedule completion tasklet
+ * xilinx_dma_do_work - Schedule completion work
  * @t: Pointer to the Xilinx DMA channel structure
  */
-static void xilinx_dma_do_tasklet(struct tasklet_struct *t)
+static void xilinx_dma_do_work(struct work_struct *t)
 {
-	struct xilinx_dma_chan *chan = from_tasklet(chan, t, tasklet);
+	struct xilinx_dma_chan *chan = from_work(chan, t, work);
 
 	xilinx_dma_chan_desc_cleanup(chan);
 }
@@ -1859,7 +1860,7 @@ static irqreturn_t xilinx_mcdma_irq_handler(int irq, void *data)
 		spin_unlock(&chan->lock);
 	}
 
-	tasklet_hi_schedule(&chan->tasklet);
+	queue_work(system_bh_highpri_wq, &chan->work);
 	return IRQ_HANDLED;
 }
 
@@ -1916,7 +1917,7 @@ static irqreturn_t xilinx_dma_irq_handler(int irq, void *data)
 		spin_unlock(&chan->lock);
 	}
 
-	tasklet_schedule(&chan->tasklet);
+	queue_work(system_bh_wq, &chan->work);
 	return IRQ_HANDLED;
 }
 
@@ -2522,7 +2523,7 @@ static void xilinx_dma_synchronize(struct dma_chan *dchan)
 {
 	struct xilinx_dma_chan *chan = to_xilinx_chan(dchan);
 
-	tasklet_kill(&chan->tasklet);
+	cancel_work_sync(&chan->work);
 }
 
 /**
@@ -2613,7 +2614,7 @@ static void xilinx_dma_chan_remove(struct xilinx_dma_chan *chan)
 	if (chan->irq > 0)
 		free_irq(chan->irq, chan);
 
-	tasklet_kill(&chan->tasklet);
+	cancel_work_sync(&chan->work);
 
 	list_del(&chan->common.device_node);
 }
@@ -2941,8 +2942,8 @@ static int xilinx_dma_chan_probe(struct xilinx_dma_device *xdev,
 			chan->has_sg ? "enabled" : "disabled");
 	}
 
-	/* Initialize the tasklet */
-	tasklet_setup(&chan->tasklet, xilinx_dma_do_tasklet);
+	/* Initialize the work */
+	INIT_WORK(&chan->work, xilinx_dma_do_work);
 
 	/*
 	 * Initialize the DMA channel and add it to the DMA engine channels

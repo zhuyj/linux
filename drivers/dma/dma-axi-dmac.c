@@ -1136,7 +1136,7 @@ static void axi_dmac_remove(struct platform_device *pdev)
 
 	of_dma_controller_free(pdev->dev.of_node);
 	free_irq(dmac->irq, dmac);
-	tasklet_kill(&dmac->chan.vchan.task);
+	cancel_work_sync(&dmac->chan.vchan.work);
 	dma_async_device_unregister(&dmac->dma_dev);
 	clk_disable_unprepare(dmac->clk);
 }

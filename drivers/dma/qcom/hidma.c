@@ -58,6 +58,7 @@
 #include <linux/atomic.h>
 #include <linux/pm_runtime.h>
 #include <linux/msi.h>
+#include <linux/workqueue.h>
 
 #include "../dmaengine.h"
 #include "hidma.h"
@@ -217,9 +218,9 @@ static int hidma_chan_init(struct hidma_dev *dmadev, u32 dma_sig)
 	return 0;
 }
 
-static void hidma_issue_task(struct tasklet_struct *t)
+static void hidma_issue_task(struct work_struct *t)
 {
-	struct hidma_dev *dmadev = from_tasklet(dmadev, t, task);
+	struct hidma_dev *dmadev = from_work(dmadev, t, work);
 
 	pm_runtime_get_sync(dmadev->ddev.dev);
 	hidma_ll_start(dmadev->lldev);
@@ -250,7 +251,7 @@ static void hidma_issue_pending(struct dma_chan *dmach)
 	/* PM will be released in hidma_callback function. */
 	status = pm_runtime_get(dmadev->ddev.dev);
 	if (status < 0)
-		tasklet_schedule(&dmadev->task);
+		queue_work(system_bh_wq, &dmadev->work);
 	else
 		hidma_ll_start(dmadev->lldev);
 }
@@ -879,7 +880,7 @@ static int hidma_probe(struct platform_device *pdev)
 		goto uninit;
 
 	dmadev->irq = chirq;
-	tasklet_setup(&dmadev->task, hidma_issue_task);
+	INIT_WORK(&dmadev->work, hidma_issue_task);
 	hidma_debug_init(dmadev);
 	hidma_sysfs_init(dmadev);
 	dev_info(&pdev->dev, "HI-DMA engine driver registration complete\n");
@@ -926,7 +927,7 @@ static void hidma_remove(struct platform_device *pdev)
 	else
 		hidma_free_msis(dmadev);
 
-	tasklet_kill(&dmadev->task);
+	cancel_work_sync(&dmadev->work);
 	hidma_sysfs_uninit(dmadev);
 	hidma_debug_uninit(dmadev);
 	hidma_ll_uninit(dmadev->lldev);

@@ -12,6 +12,7 @@
 #include <linux/dmaengine.h>
 
 #include <linux/io-64-nonatomic-hi-lo.h>
+#include <linux/workqueue.h>
 
 #include "internal.h"
 
@@ -315,7 +316,7 @@ struct dw_dma {
 	char			name[20];
 	void __iomem		*regs;
 	struct dma_pool		*desc_pool;
-	struct tasklet_struct	tasklet;
+	struct work_struct 	work;
 
 	/* channels */
 	struct dw_dma_chan	*chan;

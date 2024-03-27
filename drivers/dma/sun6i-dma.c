@@ -20,6 +20,7 @@
 #include <linux/reset.h>
 #include <linux/slab.h>
 #include <linux/types.h>
+#include <linux/workqueue.h>
 
 #include "virt-dma.h"
 
@@ -200,8 +201,8 @@ struct sun6i_dma_dev {
 	int			irq;
 	spinlock_t		lock;
 	struct reset_control	*rstc;
-	struct tasklet_struct	task;
-	atomic_t		tasklet_shutdown;
+	struct work_struct 	work;
+	atomic_t		work_shutdown;
 	struct list_head	pending;
 	struct dma_pool		*pool;
 	struct sun6i_pchan	*pchans;
@@ -474,9 +475,9 @@ static int sun6i_dma_start_desc(struct sun6i_vchan *vchan)
 	return 0;
 }
 
-static void sun6i_dma_tasklet(struct tasklet_struct *t)
+static void sun6i_dma_work(struct work_struct *t)
 {
-	struct sun6i_dma_dev *sdev = from_tasklet(sdev, t, task);
+	struct sun6i_dma_dev *sdev = from_work(sdev, t, work);
 	struct sun6i_vchan *vchan;
 	struct sun6i_pchan *pchan;
 	unsigned int pchan_alloc = 0;
@@ -574,8 +575,8 @@ static irqreturn_t sun6i_dma_interrupt(int irq, void *dev_id)
 			status = status >> DMA_IRQ_CHAN_WIDTH;
 		}
 
-		if (!atomic_read(&sdev->tasklet_shutdown))
-			tasklet_schedule(&sdev->task);
+		if (!atomic_read(&sdev->work_shutdown))
+			queue_work(system_bh_wq, &sdev->work);
 		ret = IRQ_HANDLED;
 	}
 
@@ -1000,7 +1001,7 @@ static void sun6i_dma_issue_pending(struct dma_chan *chan)
 
 		if (!vchan->phy && list_empty(&vchan->node)) {
 			list_add_tail(&vchan->node, &sdev->pending);
-			tasklet_schedule(&sdev->task);
+			queue_work(system_bh_wq, &sdev->work);
 			dev_dbg(chan2dev(chan), "vchan %p: issued\n",
 				&vchan->vc);
 		}
@@ -1048,20 +1049,20 @@ static struct dma_chan *sun6i_dma_of_xlate(struct of_phandle_args *dma_spec,
 	return chan;
 }
 
-static inline void sun6i_kill_tasklet(struct sun6i_dma_dev *sdev)
+static inline void sun6i_kill_work(struct sun6i_dma_dev *sdev)
 {
 	/* Disable all interrupts from DMA */
 	writel(0, sdev->base + DMA_IRQ_EN(0));
 	writel(0, sdev->base + DMA_IRQ_EN(1));
 
-	/* Prevent spurious interrupts from scheduling the tasklet */
-	atomic_inc(&sdev->tasklet_shutdown);
+	/* Prevent spurious interrupts from scheduling the work */
+	atomic_inc(&sdev->work_shutdown);
 
 	/* Make sure we won't have any further interrupts */
 	devm_free_irq(sdev->slave.dev, sdev->irq, sdev);
 
-	/* Actually prevent the tasklet from being scheduled */
-	tasklet_kill(&sdev->task);
+	/* Actually prevent the work from being scheduled */
+	cancel_work_sync(&sdev->work);
 }
 
 static inline void sun6i_dma_free(struct sun6i_dma_dev *sdev)
@@ -1072,7 +1073,7 @@ static inline void sun6i_dma_free(struct sun6i_dma_dev *sdev)
 		struct sun6i_vchan *vchan = &sdev->vchans[i];
 
 		list_del(&vchan->vc.chan.device_node);
-		tasklet_kill(&vchan->vc.task);
+		cancel_work_sync(&vchan->vc.work);
 	}
 }
 
@@ -1393,7 +1394,7 @@ static int sun6i_dma_probe(struct platform_device *pdev)
 	if (!sdc->vchans)
 		return -ENOMEM;
 
-	tasklet_setup(&sdc->task, sun6i_dma_tasklet);
+	INIT_WORK(&sdc->work, sun6i_dma_work);
 
 	for (i = 0; i < sdc->num_pchans; i++) {
 		struct sun6i_pchan *pchan = &sdc->pchans[i];
@@ -1458,7 +1459,7 @@ static int sun6i_dma_probe(struct platform_device *pdev)
 err_dma_unregister:
 	dma_async_device_unregister(&sdc->slave);
 err_irq_disable:
-	sun6i_kill_tasklet(sdc);
+	sun6i_kill_work(sdc);
 err_mbus_clk_disable:
 	clk_disable_unprepare(sdc->clk_mbus);
 err_clk_disable:
@@ -1477,7 +1478,7 @@ static void sun6i_dma_remove(struct platform_device *pdev)
 	of_dma_controller_free(pdev->dev.of_node);
 	dma_async_device_unregister(&sdc->slave);
 
-	sun6i_kill_tasklet(sdc);
+	sun6i_kill_work(sdc);
 
 	clk_disable_unprepare(sdc->clk_mbus);
 	clk_disable_unprepare(sdc->clk);

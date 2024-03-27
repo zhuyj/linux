@@ -12,6 +12,7 @@
 #include <linux/device.h>
 #include <linux/dmapool.h>
 #include <linux/dmaengine.h>
+#include <linux/workqueue.h>
 
 /* Define data structures needed by Freescale
  * MPC8540 and MPC8349 DMA controller.
@@ -172,7 +173,7 @@ struct fsldma_chan {
 	struct device *dev;		/* Channel device */
 	int irq;			/* Channel IRQ */
 	int id;				/* Raw id of this channel */
-	struct tasklet_struct tasklet;
+	struct work_struct work;
 	u32 feature;
 	bool idle;			/* DMA controller is idle */
 #ifdef CONFIG_PM

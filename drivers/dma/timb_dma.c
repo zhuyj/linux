@@ -18,6 +18,7 @@
 #include <linux/slab.h>
 
 #include <linux/timb_dma.h>
+#include <linux/workqueue.h>
 
 #include "dmaengine.h"
 
@@ -72,7 +73,7 @@ struct timb_dma_chan {
 	void __iomem		*membase;
 	spinlock_t		lock; /* Used to protect data structures,
 					especially the lists and descriptors,
-					from races between the tasklet and calls
+					from races between the work and calls
 					from above */
 	bool			ongoing;
 	struct list_head	active_list;
@@ -87,7 +88,7 @@ struct timb_dma_chan {
 struct timb_dma {
 	struct dma_device	dma;
 	void __iomem		*membase;
-	struct tasklet_struct	tasklet;
+	struct work_struct 	work;
 	struct timb_dma_chan	channels[];
 };
 
@@ -563,9 +564,9 @@ static int td_terminate_all(struct dma_chan *chan)
 	return 0;
 }
 
-static void td_tasklet(struct tasklet_struct *t)
+static void td_work(struct work_struct *t)
 {
-	struct timb_dma *td = from_tasklet(td, t, tasklet);
+	struct timb_dma *td = from_work(td, t, work);
 	u32 isr;
 	u32 ipr;
 	u32 ier;
@@ -598,10 +599,10 @@ static irqreturn_t td_irq(int irq, void *devid)
 	u32 ipr = ioread32(td->membase + TIMBDMA_IPR);
 
 	if (ipr) {
-		/* disable interrupts, will be re-enabled in tasklet */
+		/* disable interrupts, will be re-enabled in work */
 		iowrite32(0, td->membase + TIMBDMA_IER);
 
-		tasklet_schedule(&td->tasklet);
+		queue_work(system_bh_wq, &td->work);
 
 		return IRQ_HANDLED;
 	} else
@@ -658,12 +659,12 @@ static int td_probe(struct platform_device *pdev)
 	iowrite32(0x0, td->membase + TIMBDMA_IER);
 	iowrite32(0xFFFFFFFF, td->membase + TIMBDMA_ISR);
 
-	tasklet_setup(&td->tasklet, td_tasklet);
+	INIT_WORK(&td->work, td_work);
 
 	err = request_irq(irq, td_irq, IRQF_SHARED, DRIVER_NAME, td);
 	if (err) {
 		dev_err(&pdev->dev, "Failed to request IRQ\n");
-		goto err_tasklet_kill;
+		goto err_work_kill;
 	}
 
 	td->dma.device_alloc_chan_resources	= td_alloc_chan_resources;
@@ -728,8 +729,8 @@ static int td_probe(struct platform_device *pdev)
 
 err_free_irq:
 	free_irq(irq, td);
-err_tasklet_kill:
-	tasklet_kill(&td->tasklet);
+err_work_kill:
+	cancel_work_sync(&td->work);
 	iounmap(td->membase);
 err_free_mem:
 	kfree(td);
@@ -748,7 +749,7 @@ static void td_remove(struct platform_device *pdev)
 
 	dma_async_device_unregister(&td->dma);
 	free_irq(irq, td);
-	tasklet_kill(&td->tasklet);
+	cancel_work_sync(&td->work);
 	iounmap(td->membase);
 	kfree(td);
 	release_mem_region(iomem->start, resource_size(iomem));

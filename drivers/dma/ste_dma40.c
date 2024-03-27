@@ -23,6 +23,7 @@
 #include <linux/of_dma.h>
 #include <linux/amba/bus.h>
 #include <linux/regulator/consumer.h>
+#include <linux/workqueue.h>
 
 #include "dmaengine.h"
 #include "ste_dma40.h"
@@ -456,12 +457,12 @@ struct d40_base;
  * @lock: A spinlock to protect this struct.
  * @log_num: The logical number, if any of this channel.
  * @pending_tx: The number of pending transfers. Used between interrupt handler
- * and tasklet.
+ * and work.
  * @busy: Set to true when transfer is ongoing on this channel.
  * @phy_chan: Pointer to physical channel which this instance runs on. If this
  * point is NULL, then the channel is not allocated.
  * @chan: DMA engine handle.
- * @tasklet: Tasklet that gets scheduled from interrupt context to complete a
+ * @work: Work that gets scheduled from interrupt context to complete a
  * transfer and call client callback.
  * @client: Cliented owned descriptor list.
  * @pending_queue: Submitted jobs, to be issued by issue_pending()
@@ -489,7 +490,7 @@ struct d40_chan {
 	bool				 busy;
 	struct d40_phy_res		*phy_chan;
 	struct dma_chan			 chan;
-	struct tasklet_struct		 tasklet;
+	struct work_struct 		 work;
 	struct list_head		 client;
 	struct list_head		 pending_queue;
 	struct list_head		 active;
@@ -1590,13 +1591,13 @@ static void dma_tc_handle(struct d40_chan *d40c)
 	}
 
 	d40c->pending_tx++;
-	tasklet_schedule(&d40c->tasklet);
+	queue_work(system_bh_wq, &d40c->work);
 
 }
 
-static void dma_tasklet(struct tasklet_struct *t)
+static void dma_work(struct work_struct *t)
 {
-	struct d40_chan *d40c = from_tasklet(d40c, t, tasklet);
+	struct d40_chan *d40c = from_work(d40c, t, work);
 	struct d40_desc *d40d;
 	unsigned long flags;
 	bool callback_active;
@@ -1644,7 +1645,7 @@ static void dma_tasklet(struct tasklet_struct *t)
 	d40c->pending_tx--;
 
 	if (d40c->pending_tx)
-		tasklet_schedule(&d40c->tasklet);
+		queue_work(system_bh_wq, &d40c->work);
 
 	spin_unlock_irqrestore(&d40c->lock, flags);
 
@@ -2825,7 +2826,7 @@ static void __init d40_chan_init(struct d40_base *base, struct dma_device *dma,
 		INIT_LIST_HEAD(&d40c->client);
 		INIT_LIST_HEAD(&d40c->prepare_queue);
 
-		tasklet_setup(&d40c->tasklet, dma_tasklet);
+		INIT_WORK(&d40c->work, dma_work);
 
 		list_add_tail(&d40c->chan.device_node,
 			      &dma->channels);

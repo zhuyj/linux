@@ -20,6 +20,7 @@
 #include <linux/workqueue.h>
 #include <linux/prefetch.h>
 #include <linux/sizes.h>
+#include <linux/workqueue.h>
 #include "dma.h"
 #include "registers.h"
 #include "hw.h"
@@ -110,7 +111,7 @@ irqreturn_t ioat_dma_do_interrupt(int irq, void *data)
 	for_each_set_bit(bit, &attnstatus, BITS_PER_LONG) {
 		ioat_chan = ioat_chan_by_index(instance, bit);
 		if (test_bit(IOAT_RUN, &ioat_chan->state))
-			tasklet_schedule(&ioat_chan->cleanup_task);
+			queue_work(system_bh_wq, &ioat_chan->cleanup_task);
 	}
 
 	writeb(intrctrl, instance->reg_base + IOAT_INTRCTRL_OFFSET);
@@ -127,7 +128,7 @@ irqreturn_t ioat_dma_do_interrupt_msix(int irq, void *data)
 	struct ioatdma_chan *ioat_chan = data;
 
 	if (test_bit(IOAT_RUN, &ioat_chan->state))
-		tasklet_schedule(&ioat_chan->cleanup_task);
+		queue_work(system_bh_wq, &ioat_chan->cleanup_task);
 
 	return IRQ_HANDLED;
 }
@@ -139,8 +140,8 @@ void ioat_stop(struct ioatdma_chan *ioat_chan)
 	int chan_id = chan_num(ioat_chan);
 	struct msix_entry *msix;
 
-	/* 1/ stop irq from firing tasklets
-	 * 2/ stop the tasklet from re-arming irqs
+	/* 1/ stop irq from firing works
+	 * 2/ stop the work from re-arming irqs
 	 */
 	clear_bit(IOAT_RUN, &ioat_chan->state);
 
@@ -161,8 +162,8 @@ void ioat_stop(struct ioatdma_chan *ioat_chan)
 	/* flush inflight timers */
 	del_timer_sync(&ioat_chan->timer);
 
-	/* flush inflight tasklet runs */
-	tasklet_kill(&ioat_chan->cleanup_task);
+	/* flush inflight work runs */
+	cancel_work_sync(&ioat_chan->cleanup_task);
 
 	/* final cleanup now that everything is quiesced and can't re-arm */
 	ioat_cleanup_event(&ioat_chan->cleanup_task);
@@ -690,9 +691,9 @@ static void ioat_cleanup(struct ioatdma_chan *ioat_chan)
 	spin_unlock_bh(&ioat_chan->cleanup_lock);
 }
 
-void ioat_cleanup_event(struct tasklet_struct *t)
+void ioat_cleanup_event(struct work_struct *t)
 {
-	struct ioatdma_chan *ioat_chan = from_tasklet(ioat_chan, t, cleanup_task);
+	struct ioatdma_chan *ioat_chan = from_work(ioat_chan, t, cleanup_task);
 
 	ioat_cleanup(ioat_chan);
 	if (!test_bit(IOAT_RUN, &ioat_chan->state))

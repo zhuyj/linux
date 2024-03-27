@@ -43,6 +43,7 @@
 #include <linux/platform_device.h>
 
 #include <linux/random.h>
+#include <linux/workqueue.h>
 
 #include "dmaengine.h"
 
@@ -214,7 +215,7 @@ struct mpc_dma_chan {
 
 struct mpc_dma {
 	struct dma_device		dma;
-	struct tasklet_struct		tasklet;
+	struct work_struct 		work;
 	struct mpc_dma_chan		channels[MPC_DMA_CHANNELS];
 	struct mpc_dma_regs __iomem	*regs;
 	struct mpc_dma_tcd __iomem	*tcd;
@@ -366,8 +367,8 @@ static irqreturn_t mpc_dma_irq(int irq, void *data)
 	mpc_dma_irq_process(mdma, in_be32(&mdma->regs->dmaintl),
 					in_be32(&mdma->regs->dmaerrl), 0);
 
-	/* Schedule tasklet */
-	tasklet_schedule(&mdma->tasklet);
+	/* Schedule work */
+	queue_work(system_bh_wq, &mdma->work);
 
 	return IRQ_HANDLED;
 }
@@ -413,10 +414,10 @@ static void mpc_dma_process_completed(struct mpc_dma *mdma)
 	}
 }
 
-/* DMA Tasklet */
-static void mpc_dma_tasklet(struct tasklet_struct *t)
+/* DMA Work */
+static void mpc_dma_work(struct work_struct *t)
 {
-	struct mpc_dma *mdma = from_tasklet(mdma, t, tasklet);
+	struct mpc_dma *mdma = from_work(mdma, t, work);
 	unsigned long flags;
 	uint es;
 
@@ -1010,7 +1011,7 @@ static int mpc_dma_probe(struct platform_device *op)
 		list_add_tail(&mchan->chan.device_node, &dma->channels);
 	}
 
-	tasklet_setup(&mdma->tasklet, mpc_dma_tasklet);
+	INIT_WORK(&mdma->work, mpc_dma_work);
 
 	/*
 	 * Configure DMA Engine:
@@ -1098,7 +1099,7 @@ static void mpc_dma_remove(struct platform_device *op)
 	}
 	free_irq(mdma->irq, mdma);
 	irq_dispose_mapping(mdma->irq);
-	tasklet_kill(&mdma->tasklet);
+	cancel_work_sync(&mdma->work);
 }
 
 static const struct of_device_id mpc_dma_match[] = {

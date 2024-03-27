@@ -881,7 +881,7 @@ static void sdma_update_channel_loop(struct sdma_channel *sdmac)
 		/*
 		 * The callback is called from the interrupt context in order
 		 * to reduce latency and to avoid the risk of altering the
-		 * SDMA transaction status by the time the client tasklet is
+		 * SDMA transaction status by the time the client work is
 		 * executed.
 		 */
 		spin_unlock(&sdmac->vc.lock);
@@ -2364,11 +2364,11 @@ static void sdma_remove(struct platform_device *pdev)
 	kfree(sdma->script_addrs);
 	clk_unprepare(sdma->clk_ahb);
 	clk_unprepare(sdma->clk_ipg);
-	/* Kill the tasklet */
+	/* cancel work */
 	for (i = 0; i < MAX_DMA_CHANNELS; i++) {
 		struct sdma_channel *sdmac = &sdma->channel[i];
 
-		tasklet_kill(&sdmac->vc.task);
+		cancel_work_sync(&sdmac->vc.work);
 		sdma_free_chan_resources(&sdmac->vc.chan);
 	}
 

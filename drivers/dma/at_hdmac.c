@@ -272,7 +272,7 @@ enum atc_status {
  * @per_if: peripheral interface
  * @mem_if: memory interface
  * @status: transmit status information from irq/prep* functions
- *                to tasklet (use atomic operations)
+ *                to work (use atomic operations)
  * @save_cfg: configuration register that is saved on suspend/resume cycle
  * @save_dscr: for cyclic operations, preserve next descriptor address in
  *             the cyclic list on suspend/resume cycle

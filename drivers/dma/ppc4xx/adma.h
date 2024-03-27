@@ -9,6 +9,7 @@
 #define _PPC440SPE_ADMA_H
 
 #include <linux/types.h>
+#include <linux/workqueue.h>
 #include "dma.h"
 #include "xor.h"
 
@@ -80,7 +81,7 @@ struct ppc440spe_adma_device {
  * @pending: allows batching of hardware operations
  * @slots_allocated: records the actual size of the descriptor slot pool
  * @hw_chain_inited: h/w descriptor chain initialization flag
- * @irq_tasklet: bottom half where ppc440spe_adma_slot_cleanup runs
+ * @irq_work: bottom half where ppc440spe_adma_slot_cleanup runs
  * @needs_unmap: if buffers should not be unmapped upon final processing
  * @pdest_page: P destination page for async validate operation
  * @qdest_page: Q destination page for async validate operation
@@ -97,7 +98,7 @@ struct ppc440spe_adma_chan {
 	int pending;
 	int slots_allocated;
 	int hw_chain_inited;
-	struct tasklet_struct irq_tasklet;
+	struct work_struct irq_work;
 	u8 needs_unmap;
 	struct page *pdest_page;
 	struct page *qdest_page;

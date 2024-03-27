@@ -14,6 +14,7 @@
 #include <linux/dma/qcom-gpi-dma.h>
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
+#include <linux/workqueue.h>
 #include "../dmaengine.h"
 #include "../virt-dma.h"
 
@@ -515,7 +516,7 @@ struct gpii {
 	enum gpi_pm_state pm_state;
 	rwlock_t pm_lock;
 	struct gpi_ring ev_ring;
-	struct tasklet_struct ev_task; /* event processing tasklet */
+	struct work_struct ev_task; /* event processing work */
 	struct completion cmd_completion;
 	enum gpi_cmd gpi_cmd;
 	u32 cntxt_type_irq_msk;
@@ -755,7 +756,7 @@ static void gpi_process_ieob(struct gpii *gpii)
 	gpi_write_reg(gpii, gpii->ieob_clr_reg, BIT(0));
 
 	gpi_config_interrupts(gpii, MASK_IEOB_SETTINGS, 0);
-	tasklet_hi_schedule(&gpii->ev_task);
+	queue_work(system_bh_highpri_wq, &gpii->ev_task);
 }
 
 /* process channel control interrupt */
@@ -1145,10 +1146,10 @@ static void gpi_process_events(struct gpii *gpii)
 	} while (rp != ev_ring->rp);
 }
 
-/* processing events using tasklet */
-static void gpi_ev_tasklet(unsigned long data)
+/* processing events using work */
+static void gpi_ev_work(struct work_struct *t)
 {
-	struct gpii *gpii = (struct gpii *)data;
+	struct gpii *gpii = from_work(gpii, t, ev_task);
 
 	read_lock(&gpii->pm_lock);
 	if (!REG_ACCESS_VALID(gpii->pm_state)) {
@@ -1565,7 +1566,7 @@ static int gpi_pause(struct dma_chan *chan)
 	disable_irq(gpii->irq);
 
 	/* Wait for threads to complete out */
-	tasklet_kill(&gpii->ev_task);
+	cancel_work_sync(&gpii->ev_task);
 
 	write_lock_irq(&gpii->pm_lock);
 	gpii->pm_state = PAUSE_STATE;
@@ -2018,7 +2019,7 @@ static void gpi_free_chan_resources(struct dma_chan *chan)
 	write_unlock_irq(&gpii->pm_lock);
 
 	/* wait for threads to complete out */
-	tasklet_kill(&gpii->ev_task);
+	cancel_work_sync(&gpii->ev_task);
 
 	/* send command to de allocate event ring */
 	if (cur_state == ACTIVE_STATE)
@@ -2237,8 +2238,7 @@ static int gpi_probe(struct platform_device *pdev)
 		}
 		mutex_init(&gpii->ctrl_lock);
 		rwlock_init(&gpii->pm_lock);
-		tasklet_init(&gpii->ev_task, gpi_ev_tasklet,
-			     (unsigned long)gpii);
+		INIT_WORK(&gpii->ev_task, gpi_ev_work);
 		init_completion(&gpii->cmd_completion);
 		gpii->gpii_id = i;
 		gpii->regs = gpi_dev->ee_base;

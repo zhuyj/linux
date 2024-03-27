@@ -18,6 +18,7 @@
 #include <linux/of.h>
 #include <linux/clk.h>
 #include <linux/of_dma.h>
+#include <linux/workqueue.h>
 
 #include "virt-dma.h"
 
@@ -98,7 +99,7 @@ struct k3_dma_phy {
 struct k3_dma_dev {
 	struct dma_device	slave;
 	void __iomem		*base;
-	struct tasklet_struct	task;
+	struct work_struct 	work;
 	spinlock_t		lock;
 	struct list_head	chan_pending;
 	struct k3_dma_phy	*phy;
@@ -252,7 +253,7 @@ static irqreturn_t k3_dma_int_handler(int irq, void *dev_id)
 	writel_relaxed(err2, d->base + INT_ERR2_RAW);
 
 	if (irq_chan)
-		tasklet_schedule(&d->task);
+		queue_work(system_bh_wq, &d->work);
 
 	if (irq_chan || err1 || err2)
 		return IRQ_HANDLED;
@@ -295,9 +296,9 @@ static int k3_dma_start_txd(struct k3_dma_chan *c)
 	return -EAGAIN;
 }
 
-static void k3_dma_tasklet(struct tasklet_struct *t)
+static void k3_dma_work(struct work_struct *t)
 {
-	struct k3_dma_dev *d = from_tasklet(d, t, task);
+	struct k3_dma_dev *d = from_work(d, t, work);
 	struct k3_dma_phy *p;
 	struct k3_dma_chan *c, *cn;
 	unsigned pch, pch_alloc = 0;
@@ -432,8 +433,8 @@ static void k3_dma_issue_pending(struct dma_chan *chan)
 			if (list_empty(&c->node)) {
 				/* if new channel, add chan_pending */
 				list_add_tail(&c->node, &d->chan_pending);
-				/* check in tasklet */
-				tasklet_schedule(&d->task);
+				/* check in work */
+				queue_work(system_bh_wq, &d->work);
 				dev_dbg(d->slave.dev, "vchan %p: issued\n", &c->vc);
 			}
 		}
@@ -956,7 +957,7 @@ static int k3_dma_probe(struct platform_device *op)
 
 	spin_lock_init(&d->lock);
 	INIT_LIST_HEAD(&d->chan_pending);
-	tasklet_setup(&d->task, k3_dma_tasklet);
+	INIT_WORK(&d->work, k3_dma_work);
 	platform_set_drvdata(op, d);
 	dev_info(&op->dev, "initialized\n");
 
@@ -981,9 +982,9 @@ static void k3_dma_remove(struct platform_device *op)
 
 	list_for_each_entry_safe(c, cn, &d->slave.channels, vc.chan.device_node) {
 		list_del(&c->vc.chan.device_node);
-		tasklet_kill(&c->vc.task);
+		cancel_work_sync(&c->vc.work);
 	}
-	tasklet_kill(&d->task);
+	cancel_work_sync(&d->work);
 	clk_disable_unprepare(d->clk);
 }
 

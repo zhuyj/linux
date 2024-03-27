@@ -275,7 +275,7 @@ struct fsl_re_chan {
 	struct dma_chan chan;
 	struct fsl_re_chan_cfg *jrregs;
 	int irq;
-	struct tasklet_struct irqtask;
+	struct work_struct irqtask;
 	u32 alloc_count;
 
 	/* hw descriptor ring for inbound queue*/
