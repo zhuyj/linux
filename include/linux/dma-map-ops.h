@@ -93,6 +93,11 @@ struct dma_map_ops {
 	void (*unlink_range)(struct device *dev, dma_addr_t dma_handle,
 			     size_t size, enum dma_data_direction dir,
 			     unsigned long attrs);
+	void *(*dma_alloc_pages)(struct device *dev, size_t size,
+				 struct page **pagep, gfp_t gfp,
+				 unsigned long attrs);
+	dma_addr_t (*dma_map_extern)(struct device *dev, struct page *page,
+				size_t size, unsigned long attrs);
 };
 
 #ifdef CONFIG_DMA_OPS
