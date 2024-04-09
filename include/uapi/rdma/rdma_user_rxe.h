@@ -158,10 +158,18 @@ struct rxe_dma_info {
 	};
 };
 
+enum wqe_state {
+        wqe_state_posted,
+        wqe_state_processing,
+        wqe_state_pending,
+        wqe_state_done,
+        wqe_state_error,
+};
+
 struct rxe_send_wqe {
 	struct rxe_send_wr	wr;
-	__u32			status;
-	__u32			state;
+	enum ib_wc_status	status;
+	enum wqe_state		state;
 	__aligned_u64		iova;
 	__u32			mask;
 	__u32			first_psn;

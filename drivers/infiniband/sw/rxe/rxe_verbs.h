@@ -67,14 +67,6 @@ struct rxe_cq {
 	atomic_t		num_wq;
 };
 
-enum wqe_state {
-	wqe_state_posted,
-	wqe_state_processing,
-	wqe_state_pending,
-	wqe_state_done,
-	wqe_state_error,
-};
-
 struct rxe_sq {
 	int			max_wr;
 	int			max_sge;
