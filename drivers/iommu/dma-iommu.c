@@ -1658,14 +1658,6 @@ static void *iommu_dma_alloc(struct device *dev, size_t size,
 	return cpu_addr;
 }
 
-static dma_addr_t iommu_dma_map_extern(struct device *dev, struct page *page,
-				       size_t size, unsigned long attrs) {
-	bool coherent = dev_is_dma_coherent(dev);
-	int ioprot = dma_info_to_prot(DMA_BIDIRECTIONAL, coherent, attrs);
-
-	return __iommu_dma_map(dev, page_to_phys(page), 0, size, ioprot, dev->coherent_dma_mask);
-}
-
 static int iommu_dma_mmap(struct device *dev, struct vm_area_struct *vma,
 		void *cpu_addr, dma_addr_t dma_addr, size_t size,
 		unsigned long attrs)
@@ -1802,7 +1794,6 @@ static const struct dma_map_ops iommu_dma_ops = {
 	.link_range		= iommu_dma_link_range,
 	.unlink_range		= iommu_dma_unlink_range,
 	.dma_alloc_pages	= iommu_dma_alloc_pages,
-	.dma_map_extern		= iommu_dma_map_extern,
 };
 
 /*
