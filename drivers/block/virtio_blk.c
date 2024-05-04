@@ -106,9 +106,16 @@ struct virtblk_req {
 	} in_hdr;
 
 	size_t in_hdr_len;
+	struct sg_table1 {
+		struct scatterlist *sgl;	/* the list */
+		unsigned int nents;		/* number of mapped entries */
+		unsigned int orig_nents;	/* original size of list */
+	} sg_table;
 
-	struct sg_table sg_table;
-	struct scatterlist sg[];
+	struct dma_iova_attrs iova;
+	dma_addr_t dma_link_address[256];
+	u16 nr_dma_link_address;
+	struct scatterlist sg[]; /* This also needs to be replaced */
 };
 
 static inline blk_status_t virtblk_result(u8 status)
@@ -207,7 +214,7 @@ static int virtblk_setup_discard_write_zeroes_erase(struct request *req, bool un
 static void virtblk_unmap_data(struct request *req, struct virtblk_req *vbr)
 {
 	if (blk_rq_nr_phys_segments(req))
-		sg_free_table_chained(&vbr->sg_table,
+		sg_free_table_chained((struct sg_table*)&vbr->sg_table,
 				      VIRTIO_BLK_INLINE_SG_CNT);
 }
 
@@ -220,7 +227,7 @@ static int virtblk_map_data(struct blk_mq_hw_ctx *hctx, struct request *req,
 		return 0;
 
 	vbr->sg_table.sgl = vbr->sg;
-	err = sg_alloc_table_chained(&vbr->sg_table,
+	err = sg_alloc_table_chained((struct sg_table *)&vbr->sg_table,
 				     blk_rq_nr_phys_segments(req),
 				     vbr->sg_table.sgl,
 				     VIRTIO_BLK_INLINE_SG_CNT);
