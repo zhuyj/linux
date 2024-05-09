@@ -106,6 +106,20 @@ struct virtblk_req {
 	} in_hdr;
 
 	size_t in_hdr_len;
+#if 0
+	struct scatterlist {
+		unsigned long   page_link;
+		unsigned int    offset;
+		unsigned int    length;
+		dma_addr_t      dma_address;
+#ifdef CONFIG_NEED_SG_DMA_LENGTH
+		unsigned int    dma_length;
+#endif
+#ifdef CONFIG_NEED_SG_DMA_FLAGS
+		unsigned int    dma_flags;
+#endif
+	};
+#endif
 	struct sg_table1 {
 		struct scatterlist *sgl;	/* the list */
 		unsigned int nents;		/* number of mapped entries */
