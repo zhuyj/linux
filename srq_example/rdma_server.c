@@ -47,6 +47,367 @@ static int send_flags;
 static uint8_t send_msg[16];
 static uint8_t recv_msg[16];
 
+#define VERB_ERR(verb, ret) \
+        fprintf(stderr, "%s returned %d errno %d\n", verb, ret, errno)
+
+/* Default parameters values */
+#define DEFAULT_PORT "51216"
+#define DEFAULT_MSG_COUNT 100
+#define DEFAULT_MSG_LENGTH 100000
+#define DEFAULT_QP_COUNT 40
+#define DEFAULT_MAX_WR 64
+
+/* Resources used in the example */
+struct context {
+	/* User parameters */
+	char *server_name;
+	char *server_port;
+	int msg_count;
+	int msg_length;
+	int qp_count;
+	int max_wr;
+
+	/* Resources */
+	struct rdma_cm_id *srq_id;
+	struct rdma_cm_id **conn_id;
+	struct ibv_mr *send_mr;
+	struct ibv_mr *recv_mr;
+	struct ibv_srq *srq;
+	struct ibv_cq *srq_cq;
+	struct ibv_comp_channel *srq_cq_channel;
+	char *send_buf;
+	char *recv_buf;
+};
+
+/*
+ * Function: srq_init_resources
+ * Input:
+ *      ctx     The context object
+ *      rai     The RDMA address info for the connection
+ * Output:
+ *      none
+ * Returns:
+ *      0 on success, non-zero on failure
+ * Description:
+ *      This function initializes resources that are common to both the client
+ *      and server functionality.
+ *      It creates our SRQ, registers memory regions, posts receive buffers
+ *      and creates a single completion queue that will be used for the receive
+ *      queue on each queue pair.
+ */
+int srq_init_resources(struct context *ctx, struct rdma_addrinfo *rai)
+{
+	int ret, i;
+	struct rdma_cm_id *id;
+
+	/* Create an ID used for creating/accessing our SRQ */
+	ret = rdma_create_id(NULL, &ctx->srq_id, NULL, RDMA_PS_TCP);
+	if (ret) {
+		VERB_ERR("rdma_create_id", ret);
+		return ret;
+	}
+
+	/* We need to bind the ID to a particular RDMA device
+	 * This is done by resolving the address or binding to the address */
+	ret = rdma_bind_addr(ctx->srq_id, rai->ai_src_addr);
+	if (ret) {
+		VERB_ERR("rdma_bind_addr", ret);
+		return ret;
+	}
+
+	/* Create the memory regions being used in this example */
+	ctx->recv_mr =
+	    rdma_reg_msgs(ctx->srq_id, ctx->recv_buf, ctx->msg_length);
+	if (!ctx->recv_mr) {
+		VERB_ERR("rdma_reg_msgs", -1);
+		return -1;
+	}
+
+	ctx->send_mr =
+	    rdma_reg_msgs(ctx->srq_id, ctx->send_buf, ctx->msg_length);
+	if (!ctx->send_mr) {
+		VERB_ERR("rdma_reg_msgs", -1);
+		return -1;
+	}
+
+	/* Create our shared receive queue */
+	struct ibv_srq_init_attr srq_attr;
+	memset(&srq_attr, 0, sizeof(srq_attr));
+	srq_attr.attr.max_wr = ctx->max_wr;
+	srq_attr.attr.max_sge = 1;
+
+	ret = rdma_create_srq(ctx->srq_id, NULL, &srq_attr);
+	if (ret) {
+		VERB_ERR("rdma_create_srq", ret);
+		return -1;
+	}
+
+	/* Save the SRQ in our context so we can assign it to other QPs later */
+	ctx->srq = ctx->srq_id->srq;
+
+	/* Post our receive buffers on the SRQ */
+	for (i = 0; i < ctx->max_wr; i++) {
+		ret =
+		    rdma_post_recv(ctx->srq_id, NULL, ctx->recv_buf,
+				   ctx->msg_length, ctx->recv_mr);
+		if (ret) {
+			VERB_ERR("rdma_post_recv", ret);
+			return ret;
+		}
+	}
+
+	/* Create a completion channel to use with the SRQ CQ */
+	ctx->srq_cq_channel = ibv_create_comp_channel(ctx->srq_id->verbs);
+	if (!ctx->srq_cq_channel) {
+		VERB_ERR("ibv_create_comp_channel", -1);
+		return -1;
+	}
+
+	/* Create a CQ to use for all connections (QPs) that use the SRQ */
+	ctx->srq_cq = ibv_create_cq(ctx->srq_id->verbs, ctx->max_wr, NULL,
+				    ctx->srq_cq_channel, 0);
+	if (!ctx->srq_cq) {
+		VERB_ERR("ibv_create_cq", -1);
+		return -1;
+	}
+
+	/* Make sure that we get notified on the first completion */
+	ret = ibv_req_notify_cq(ctx->srq_cq, 0);
+	if (ret) {
+		VERB_ERR("ibv_req_notify_cq", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+/*
+ * Function:    srq_destroy_resources
+ * Input:
+ *      ctx     The context object
+ * Output:
+ *      none
+ * Returns:
+ *      0 on success, non-zero on failure
+ * Description:
+ *      This function cleans up resources used by the application
+ */
+void srq_destroy_resources(struct context *ctx)
+{
+	int i;
+
+	if (ctx->conn_id) {
+		for (i = 0; i < ctx->qp_count; i++) {
+			if (ctx->conn_id[i]) {
+				if (ctx->conn_id[i]->qp &&
+				    ctx->conn_id[i]->qp->state == IBV_QPS_RTS) {
+					rdma_disconnect(ctx->conn_id[i]);
+				}
+				rdma_destroy_qp(ctx->conn_id[i]);
+				rdma_destroy_id(ctx->conn_id[i]);
+			}
+		}
+
+		free(ctx->conn_id);
+	}
+
+	if (ctx->recv_mr)
+		rdma_dereg_mr(ctx->recv_mr);
+
+	if (ctx->send_mr)
+		rdma_dereg_mr(ctx->send_mr);
+
+	if (ctx->recv_buf)
+		free(ctx->recv_buf);
+
+	if (ctx->send_buf)
+		free(ctx->send_buf);
+
+	if (ctx->srq_cq)
+		ibv_destroy_cq(ctx->srq_cq);
+
+	if (ctx->srq_cq_channel)
+		ibv_destroy_comp_channel(ctx->srq_cq_channel);
+
+	if (ctx->srq_id) {
+		rdma_destroy_srq(ctx->srq_id);
+		rdma_destroy_id(ctx->srq_id);
+	}
+}
+
+/*
+ * Function:    srq_await_completion
+ * Input:
+ *      ctx     The context object
+ * Output:
+ *      none
+ * Returns:
+ *      0 on success, non-zero on failure
+ * Description:
+ *      Waits for a completion on the SRQ CQ
+ */
+int srq_await_completion(struct context *ctx)
+{
+	int ret;
+	struct ibv_cq *ev_cq;
+	void *ev_ctx;
+
+	/* Wait for a CQ event to arrive on the channel */
+	ret = ibv_get_cq_event(ctx->srq_cq_channel, &ev_cq, &ev_ctx);
+	if (ret) {
+		VERB_ERR("ibv_get_cq_event", ret);
+		return ret;
+	}
+
+	ibv_ack_cq_events(ev_cq, 1);
+
+	/* Reload the event notification */
+	ret = ibv_req_notify_cq(ctx->srq_cq, 0);
+	if (ret) {
+		VERB_ERR("ibv_req_notify_cq", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+/*
+ * Function:    srq_run_server
+ * Input:
+ *      ctx     The context object
+ *      rai     The RDMA address info for the connection
+ * Output:
+ *      none
+ * Returns:
+ *      0 on success, non-zero on failure
+ * Description:
+ *      Executes the server side of the example
+ */
+int srq_run_server(struct context *ctx, struct rdma_addrinfo *rai)
+{
+	int ret, i;
+	uint64_t send_count = 0;
+	uint64_t recv_count = 0;
+	struct ibv_wc wc;
+	struct ibv_qp_init_attr qp_attr;
+
+	ret = srq_init_resources(ctx, rai);
+	if (ret) {
+		printf("init_resources returned %d\n", ret);
+		return ret;
+	}
+
+	ret = rdma_listen(ctx->srq_id, 4);
+	if (ret) {
+		VERB_ERR("rdma_listen", ret);
+		return ret;
+	}
+
+	printf("waiting for connection from client...\n");
+	for (i = 0; i < ctx->qp_count; i++) {
+		ret = rdma_get_request(ctx->srq_id, &ctx->conn_id[i]);
+		if (ret) {
+			VERB_ERR("rdma_get_request", ret);
+			return ret;
+		}
+
+		/* Create the queue pair */
+		memset(&qp_attr, 0, sizeof(qp_attr));
+
+		qp_attr.qp_context = ctx;
+		qp_attr.qp_type = IBV_QPT_RC;
+		qp_attr.cap.max_send_wr = ctx->max_wr;
+		qp_attr.cap.max_recv_wr = ctx->max_wr;
+		qp_attr.cap.max_send_sge = 1;
+		qp_attr.cap.max_recv_sge = 1;
+		qp_attr.cap.max_inline_data = 0;
+		qp_attr.recv_cq = ctx->srq_cq;
+		qp_attr.srq = ctx->srq;
+		qp_attr.sq_sig_all = 0;
+
+		ret = rdma_create_qp(ctx->conn_id[i], NULL, &qp_attr);
+		if (ret) {
+			VERB_ERR("rdma_create_qp", ret);
+			return ret;
+		}
+
+		/* Set the new connection to use our SRQ */
+		ctx->conn_id[i]->srq = ctx->srq;
+
+		ret = rdma_accept(ctx->conn_id[i], NULL);
+		if (ret) {
+			VERB_ERR("rdma_accept", ret);
+			return ret;
+		}
+	}
+
+	while (recv_count < ctx->msg_count) {
+		i = 0;
+		while (i < ctx->max_wr && recv_count < ctx->msg_count) {
+			int ne;
+
+			ret = srq_await_completion(ctx);
+			if (ret) {
+				printf("await_completion %d\n", ret);
+				return ret;
+			}
+
+			do {
+				ne = ibv_poll_cq(ctx->srq_cq, 1, &wc);
+				if (ne < 0) {
+					VERB_ERR("ibv_poll_cq", ne);
+					return ne;
+				} else if (ne == 0)
+					break;
+
+				if (wc.status != IBV_WC_SUCCESS) {
+					printf("work completion status %s\n",
+					       ibv_wc_status_str(wc.status));
+					return -1;
+				}
+
+				recv_count++;
+				printf("recv count: %d, qp_num: %d\n",
+				       recv_count, wc.qp_num);
+
+				ret =
+				    rdma_post_recv(ctx->srq_id,
+						   (void *)wc.wr_id,
+						   ctx->recv_buf,
+						   ctx->msg_length,
+						   ctx->recv_mr);
+				if (ret) {
+					VERB_ERR("rdma_post_recv", ret);
+					return ret;
+				}
+				//              printf("ctx->msg_length:%d\n", ctx->msg_length);
+
+				i++;
+			}
+			while (ne);
+		}
+
+		ret = rdma_post_send(ctx->conn_id[0], NULL, ctx->send_buf,
+				     ctx->msg_length, ctx->send_mr,
+				     IBV_SEND_SIGNALED);
+		if (ret) {
+			VERB_ERR("rdma_post_send", ret);
+			return ret;
+		}
+
+		ret = rdma_get_send_comp(ctx->conn_id[0], &wc);
+		if (ret <= 0) {
+			VERB_ERR("rdma_get_send_comp", ret);
+			return -1;
+		}
+
+		send_count++;
+		printf("send count: %d\n", send_count);
+	}
+
+	return 0;
+}
+
 static int run(void)
 {
 	struct rdma_addrinfo hints, *res;
@@ -89,8 +450,7 @@ static int run(void)
 
 	memset(&qp_attr, 0, sizeof qp_attr);
 	memset(&init_attr, 0, sizeof init_attr);
-	ret = ibv_query_qp(id->qp, &qp_attr, IBV_QP_CAP,
-			   &init_attr);
+	ret = ibv_query_qp(id->qp, &qp_attr, IBV_QP_CAP, &init_attr);
 	if (ret) {
 		perror("ibv_query_qp");
 		goto out_destroy_accept_ep;
@@ -128,7 +488,7 @@ static int run(void)
 		goto out_dereg_send;
 	}
 
-	while ((ret = rdma_get_recv_comp(id, &wc)) == 0);
+	while ((ret = rdma_get_recv_comp(id, &wc)) == 0) ;
 	if (ret < 0) {
 		perror("rdma_get_recv_comp");
 		goto out_disconnect;
@@ -140,24 +500,24 @@ static int run(void)
 		goto out_disconnect;
 	}
 
-	while ((ret = rdma_get_send_comp(id, &wc)) == 0);
+	while ((ret = rdma_get_send_comp(id, &wc)) == 0) ;
 	if (ret < 0)
 		perror("rdma_get_send_comp");
 	else
 		ret = 0;
 
-out_disconnect:
+ out_disconnect:
 	rdma_disconnect(id);
-out_dereg_send:
+ out_dereg_send:
 	if ((send_flags & IBV_SEND_INLINE) == 0)
 		rdma_dereg_mr(send_mr);
-out_dereg_recv:
+ out_dereg_recv:
 	rdma_dereg_mr(mr);
-out_destroy_accept_ep:
+ out_destroy_accept_ep:
 	rdma_destroy_ep(id);
-out_destroy_listen_ep:
+ out_destroy_listen_ep:
 	rdma_destroy_ep(listen_id);
-out_free_addrinfo:
+ out_free_addrinfo:
 	rdma_freeaddrinfo(res);
 	return ret;
 }
@@ -186,8 +546,60 @@ int main(int argc, char **argv)
 		}
 	}
 
-	printf("rdma_server: start\n");
-	ret = run();
-	printf("rdma_server: end %d\n", ret);
+	if (!enable_srq) {
+		printf("rdma_server: rq start\n");
+		ret = run();
+		printf("rdma_server: rq end %d\n", ret);
+	} else {
+		int ret, op;
+		struct context ctx;
+		struct rdma_addrinfo *rai, hints;
+
+		memset(&ctx, 0, sizeof(ctx));
+		memset(&hints, 0, sizeof(hints));
+
+		ctx.server_port = DEFAULT_PORT;
+		ctx.msg_count = DEFAULT_MSG_COUNT;
+		ctx.msg_length = DEFAULT_MSG_LENGTH;
+		ctx.qp_count = DEFAULT_QP_COUNT;
+		ctx.max_wr = DEFAULT_MAX_WR;
+		ctx.server_name = (char *)server;
+
+		if (ctx.server_name == NULL) {
+			printf("server address required (use -a)!\n");
+			exit(1);
+		}
+
+		hints.ai_port_space = RDMA_PS_TCP;
+		hints.ai_flags = RAI_PASSIVE;	/* this makes it a server */
+
+		ret =
+		    rdma_getaddrinfo(ctx.server_name, ctx.server_port, &hints,
+				     &rai);
+		if (ret) {
+			VERB_ERR("rdma_getaddrinfo", ret);
+			exit(1);
+		}
+
+		/* allocate memory for our QPs and send/recv buffers */
+		ctx.conn_id = (struct rdma_cm_id **)calloc(ctx.qp_count,
+							   sizeof(struct
+								  rdma_cm_id
+								  *));
+		memset(ctx.conn_id, 0, sizeof(ctx.conn_id));
+
+		ctx.send_buf = (char *)malloc(ctx.msg_length);
+		memset(ctx.send_buf, 0, ctx.msg_length);
+		ctx.recv_buf = (char *)malloc(ctx.msg_length);
+		memset(ctx.recv_buf, 0, ctx.msg_length);
+
+		ret = srq_run_server(&ctx, rai);
+
+		srq_destroy_resources(&ctx);
+		free(rai);
+
+		return ret;
+
+	}
 	return ret;
 }
