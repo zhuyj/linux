@@ -35,9 +35,11 @@
 #include <netdb.h>
 #include <rdma/rdma_cma.h>
 #include <rdma/rdma_verbs.h>
+#include <stdbool.h>
 
 static const char *server = "0.0.0.0";
 static const char *port = "7471";
+static bool enable_srq = false;
 
 static struct rdma_cm_id *listen_id, *id;
 static struct ibv_mr *mr, *send_mr;
@@ -164,7 +166,7 @@ int main(int argc, char **argv)
 {
 	int op, ret;
 
-	while ((op = getopt(argc, argv, "s:p:")) != -1) {
+	while ((op = getopt(argc, argv, "s:p:e:")) != -1) {
 		switch (op) {
 		case 's':
 			server = optarg;
@@ -172,10 +174,14 @@ int main(int argc, char **argv)
 		case 'p':
 			port = optarg;
 			break;
+		case 'e':
+			enable_srq = true;
+			break;
 		default:
 			printf("usage: %s\n", argv[0]);
 			printf("\t[-s server_address]\n");
 			printf("\t[-p port_number]\n");
+			printf("\t[-e enable srq]\n");
 			exit(1);
 		}
 	}
