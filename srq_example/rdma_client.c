@@ -37,15 +37,15 @@
 #include <rdma/rdma_verbs.h>
 #include <stdbool.h>
 
-static char *server = "127.0.0.1";
-static char *port = "7471";
+static char *server_name = "127.0.0.1";
+static char *server_port = "7471";
 static bool enable_srq = false;
 
 static struct rdma_cm_id *id;
-static struct ibv_mr *mr, *send_mr;
+static struct ibv_mr *recv_mr, *send_mr;
 static int send_flags;
-static uint8_t send_msg[16];
-static uint8_t recv_msg[16];
+static uint8_t send_buf[16];
+static uint8_t recv_buf[16];
 
 #define VERB_ERR(verb, ret) \
         fprintf(stderr, "%s returned %d errno %d\n", verb, ret, errno)
@@ -344,7 +344,7 @@ int srq_run_client(struct context *ctx, struct rdma_addrinfo *rai)
 			}
 
 			send_count++;
-			printf("send count: %d, qp_num: %d\n", send_count,
+			printf("send count: %lu, qp_num: %d\n", send_count,
 			       wc.qp_num);
 		}
 
@@ -370,7 +370,7 @@ int srq_run_client(struct context *ctx, struct rdma_addrinfo *rai)
 			}
 
 			recv_count++;
-			printf("recv count: %d\n", recv_count);
+			printf("recv count: %lu\n", recv_count);
 
 			ret = rdma_post_recv(ctx->srq_id, (void *)wc.wr_id,
 					     ctx->recv_buf, ctx->msg_length,
@@ -386,7 +386,7 @@ int srq_run_client(struct context *ctx, struct rdma_addrinfo *rai)
 	return ret;
 }
 
-static int run(void)
+static int srq_run(void)
 {
 	struct rdma_addrinfo hints, *res;
 	struct ibv_qp_init_attr attr;
@@ -395,7 +395,7 @@ static int run(void)
 
 	memset(&hints, 0, sizeof hints);
 	hints.ai_port_space = RDMA_PS_TCP;
-	ret = rdma_getaddrinfo(server, port, &hints, &res);
+	ret = rdma_getaddrinfo(server_name, server_port, &hints, &res);
 	if (ret) {
 		printf("rdma_getaddrinfo: %s\n", gai_strerror(ret));
 		goto out;
@@ -420,14 +420,14 @@ static int run(void)
 		goto out_free_addrinfo;
 	}
 
-	mr = rdma_reg_msgs(id, recv_msg, 16);
-	if (!mr) {
+	recv_mr = rdma_reg_msgs(id, recv_buf, 16);
+	if (!recv_mr) {
 		perror("rdma_reg_msgs for recv_msg");
 		ret = -1;
 		goto out_destroy_ep;
 	}
 	if ((send_flags & IBV_SEND_INLINE) == 0) {
-		send_mr = rdma_reg_msgs(id, send_msg, 16);
+		send_mr = rdma_reg_msgs(id, send_buf, 16);
 		if (!send_mr) {
 			perror("rdma_reg_msgs for send_msg");
 			ret = -1;
@@ -435,7 +435,7 @@ static int run(void)
 		}
 	}
 
-	ret = rdma_post_recv(id, NULL, recv_msg, 16, mr);
+	ret = rdma_post_recv(id, NULL, recv_buf, 16, recv_mr);
 	if (ret) {
 		perror("rdma_post_recv");
 		goto out_dereg_send;
@@ -447,7 +447,7 @@ static int run(void)
 		goto out_dereg_send;
 	}
 
-	ret = rdma_post_send(id, NULL, send_msg, 16, send_mr, send_flags);
+	ret = rdma_post_send(id, NULL, send_buf, 16, send_mr, send_flags);
 	if (ret) {
 		perror("rdma_post_send");
 		goto out_disconnect;
@@ -471,7 +471,7 @@ static int run(void)
 	if ((send_flags & IBV_SEND_INLINE) == 0)
 		rdma_dereg_mr(send_mr);
  out_dereg_recv:
-	rdma_dereg_mr(mr);
+	rdma_dereg_mr(recv_mr);
  out_destroy_ep:
 	rdma_destroy_ep(id);
  out_free_addrinfo:
@@ -482,15 +482,16 @@ static int run(void)
 
 int main(int argc, char **argv)
 {
+	//ret is declared twice
 	int op, ret;
 
 	while ((op = getopt(argc, argv, "s:p:e")) != -1) {
 		switch (op) {
 		case 's':
-			server = optarg;
+			server_name = optarg;
 			break;
 		case 'p':
-			port = optarg;
+			server_port = optarg;
 			break;
 		case 'e':
 			enable_srq = true;
@@ -506,7 +507,7 @@ int main(int argc, char **argv)
 
 	if (!enable_srq) {
 		printf("rdma_client: start\n");
-		ret = run();
+		ret = srq_run();
 		printf("rdma_client: end %d\n", ret);
 		return ret;
 	} else {
@@ -516,12 +517,12 @@ int main(int argc, char **argv)
 		memset(&ctx, 0, sizeof (ctx));
 		memset(&hints, 0, sizeof (hints));
 
-		ctx.server_port = port;
+		ctx.server_port = server_port;
 		ctx.msg_count = DEFAULT_MSG_COUNT;
 		ctx.msg_length = DEFAULT_MSG_LENGTH;
 		ctx.qp_count = DEFAULT_QP_COUNT;
 		ctx.max_wr = DEFAULT_MAX_WR;
-		ctx.server_name = (char *)server;
+		ctx.server_name = server_name;
 		if (ctx.server_name == NULL) {
 			printf("server address required (use -a)!\n");
 			exit(1);

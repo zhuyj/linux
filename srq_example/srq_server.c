@@ -384,7 +384,7 @@ run_server (struct context *ctx, struct rdma_addrinfo *rai)
 		}
 
 	      recv_count++;
-	      printf ("recv count: %d, qp_num: %d\n", recv_count, wc.qp_num);
+	      printf ("recv count: %lu, qp_num: %d\n", recv_count, wc.qp_num);
 
 	      ret = rdma_post_recv (ctx->srq_id, (void *) wc.wr_id,
 				    ctx->recv_buf, ctx->msg_length,
@@ -417,7 +417,7 @@ run_server (struct context *ctx, struct rdma_addrinfo *rai)
 	}
 
       send_count++;
-      printf ("send count: %d\n", send_count);
+      printf ("send count: %lu\n", send_count);
     }
 
   return 0;
