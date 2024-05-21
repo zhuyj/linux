@@ -41,7 +41,7 @@ static char *server_name = "0.0.0.0";
 static char *server_port = "7471";
 static bool enable_srq = false;
 
-static struct rdma_cm_id *listen_id, *id;
+static struct rdma_cm_id *listen_id, *rq_id;
 static struct ibv_mr *recv_mr, *send_mr;
 static int send_flags;
 static uint8_t send_buf[16];
@@ -441,7 +441,7 @@ static int run(void)
 		goto out_destroy_listen_ep;
 	}
 
-	ret = rdma_get_request(listen_id, &id);
+	ret = rdma_get_request(listen_id, &rq_id);
 	if (ret) {
 		perror("rdma_get_request");
 		goto out_destroy_listen_ep;
@@ -449,7 +449,7 @@ static int run(void)
 
 	memset(&qp_attr, 0, sizeof qp_attr);
 	memset(&init_attr, 0, sizeof init_attr);
-	ret = ibv_query_qp(id->qp, &qp_attr, IBV_QP_CAP, &init_attr);
+	ret = ibv_query_qp(rq_id->qp, &qp_attr, IBV_QP_CAP, &init_attr);
 	if (ret) {
 		perror("ibv_query_qp");
 		goto out_destroy_accept_ep;
@@ -460,14 +460,14 @@ static int run(void)
 		printf("rdma_server: device doesn't support IBV_SEND_INLINE, "
 		       "using sge sends\n");
 
-	recv_mr = rdma_reg_msgs(id, recv_buf, 16);
+	recv_mr = rdma_reg_msgs(rq_id, recv_buf, 16);
 	if (!recv_mr) {
 		ret = -1;
 		perror("rdma_reg_msgs for recv_msg");
 		goto out_destroy_accept_ep;
 	}
 	if ((send_flags & IBV_SEND_INLINE) == 0) {
-		send_mr = rdma_reg_msgs(id, send_buf, 16);
+		send_mr = rdma_reg_msgs(rq_id, send_buf, 16);
 		if (!send_mr) {
 			ret = -1;
 			perror("rdma_reg_msgs for send_msg");
@@ -475,45 +475,45 @@ static int run(void)
 		}
 	}
 
-	ret = rdma_post_recv(id, NULL, recv_buf, 16, recv_mr);
+	ret = rdma_post_recv(rq_id, NULL, recv_buf, 16, recv_mr);
 	if (ret) {
 		perror("rdma_post_recv");
 		goto out_dereg_send;
 	}
 
-	ret = rdma_accept(id, NULL);
+	ret = rdma_accept(rq_id, NULL);
 	if (ret) {
 		perror("rdma_accept");
 		goto out_dereg_send;
 	}
 
-	while ((ret = rdma_get_recv_comp(id, &wc)) == 0) ;
+	while ((ret = rdma_get_recv_comp(rq_id, &wc)) == 0) ;
 	if (ret < 0) {
 		perror("rdma_get_recv_comp");
 		goto out_disconnect;
 	}
 
-	ret = rdma_post_send(id, NULL, send_buf, 16, send_mr, send_flags);
+	ret = rdma_post_send(rq_id, NULL, send_buf, 16, send_mr, send_flags);
 	if (ret) {
 		perror("rdma_post_send");
 		goto out_disconnect;
 	}
 
-	while ((ret = rdma_get_send_comp(id, &wc)) == 0) ;
+	while ((ret = rdma_get_send_comp(rq_id, &wc)) == 0) ;
 	if (ret < 0)
 		perror("rdma_get_send_comp");
 	else
 		ret = 0;
 
  out_disconnect:
-	rdma_disconnect(id);
+	rdma_disconnect(rq_id);
  out_dereg_send:
 	if ((send_flags & IBV_SEND_INLINE) == 0)
 		rdma_dereg_mr(send_mr);
  out_dereg_recv:
 	rdma_dereg_mr(recv_mr);
  out_destroy_accept_ep:
-	rdma_destroy_ep(id);
+	rdma_destroy_ep(rq_id);
  out_destroy_listen_ep:
 	rdma_destroy_ep(listen_id);
  out_free_addrinfo:
