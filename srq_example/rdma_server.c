@@ -37,8 +37,8 @@
 #include <rdma/rdma_verbs.h>
 #include <stdbool.h>
 
-static const char *server = "0.0.0.0";
-static const char *port = "7471";
+static char *server = "0.0.0.0";
+static char *port = "7471";
 static bool enable_srq = false;
 
 static struct rdma_cm_id *listen_id, *id;
@@ -526,7 +526,7 @@ int main(int argc, char **argv)
 {
 	int op, ret;
 
-	while ((op = getopt(argc, argv, "s:p:e:")) != -1) {
+	while ((op = getopt(argc, argv, "s:p:e")) != -1) {
 		switch (op) {
 		case 's':
 			server = optarg;
@@ -551,10 +551,11 @@ int main(int argc, char **argv)
 		ret = run();
 		printf("rdma_server: rq end %d\n", ret);
 	} else {
-		int ret, op;
+		int op;
 		struct context ctx;
 		struct rdma_addrinfo *rai, hints;
 
+		ret = 0;
 		memset(&ctx, 0, sizeof(ctx));
 		memset(&hints, 0, sizeof(hints));
 
@@ -563,10 +564,10 @@ int main(int argc, char **argv)
 		ctx.msg_length = DEFAULT_MSG_LENGTH;
 		ctx.qp_count = DEFAULT_QP_COUNT;
 		ctx.max_wr = DEFAULT_MAX_WR;
-		ctx.server_name = (char *)server;
+		ctx.server_name = server;
 
 		if (ctx.server_name == NULL) {
-			printf("server address required (use -a)!\n");
+			printf("server address required (use -s)!\n");
 			exit(1);
 		}
 
@@ -593,8 +594,9 @@ int main(int argc, char **argv)
 		ctx.recv_buf = (char *)malloc(ctx.msg_length);
 		memset(ctx.recv_buf, 0, ctx.msg_length);
 
+		printf("rdma_server: srq start\n");
 		ret = srq_run_server(&ctx, rai);
-
+		printf("rdma_server: srq end %d\n", ret);
 		srq_destroy_resources(&ctx);
 		free(rai);
 
