@@ -37,8 +37,8 @@
 #include <rdma/rdma_verbs.h>
 #include <stdbool.h>
 
-static const char *server = "127.0.0.1";
-static const char *port = "7471";
+static char *server = "127.0.0.1";
+static char *port = "7471";
 static bool enable_srq = false;
 
 static struct rdma_cm_id *id;
@@ -485,7 +485,7 @@ int main(int argc, char **argv)
 {
 	int op, ret;
 
-	while ((op = getopt(argc, argv, "s:p:e:")) != -1) {
+	while ((op = getopt(argc, argv, "s:p:e")) != -1) {
 		switch (op) {
 		case 's':
 			server = optarg;
@@ -511,7 +511,6 @@ int main(int argc, char **argv)
 		printf("rdma_client: end %d\n", ret);
 		return ret;
 	} else {
-		int ret, op;
 		struct context ctx;
 		struct rdma_addrinfo *rai, hints;
 
