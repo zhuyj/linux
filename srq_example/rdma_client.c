@@ -37,8 +37,8 @@
 #include <rdma/rdma_verbs.h>
 #include <stdbool.h>
 
-static const char *server = "127.0.0.1";
-static const char *port = "7471";
+static char *server = "127.0.0.1";
+static char *port = "7471";
 static bool enable_srq = false;
 
 static struct rdma_cm_id *id;
@@ -51,10 +51,9 @@ static uint8_t recv_msg[16];
         fprintf(stderr, "%s returned %d errno %d\n", verb, ret, errno)
 
 /* Default parameters values */
-#define DEFAULT_PORT "51216"
 #define DEFAULT_MSG_COUNT 100
 #define DEFAULT_MSG_LENGTH 100000
-#define DEFAULT_QP_COUNT 40
+#define DEFAULT_QP_COUNT  128
 #define DEFAULT_MAX_WR 64
 
 /* Resources used in the example */
@@ -486,7 +485,7 @@ int main(int argc, char **argv)
 	//ret is declared twice
 	int op, ret;
 
-	while ((op = getopt(argc, argv, "s:p:e:")) != -1) {
+	while ((op = getopt(argc, argv, "s:p:e")) != -1) {
 		switch (op) {
 		case 's':
 			server = optarg;
@@ -512,14 +511,13 @@ int main(int argc, char **argv)
 		printf("rdma_client: end %d\n", ret);
 		return ret;
 	} else {
-		int ret, op;
 		struct context ctx;
 		struct rdma_addrinfo *rai, hints;
 
 		memset(&ctx, 0, sizeof (ctx));
 		memset(&hints, 0, sizeof (hints));
 
-		ctx.server_port = DEFAULT_PORT;
+		ctx.server_port = port;
 		ctx.msg_count = DEFAULT_MSG_COUNT;
 		ctx.msg_length = DEFAULT_MSG_LENGTH;
 		ctx.qp_count = DEFAULT_QP_COUNT;
