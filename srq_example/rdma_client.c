@@ -380,7 +380,7 @@ int srq_run_client(struct context *ctx, struct rdma_addrinfo *rai)
 	return ret;
 }
 
-static int rq_run(struct context *ctx)
+static int rq_run_client(struct context *ctx)
 {
 	struct rdma_addrinfo hints, *res;
 	struct ibv_qp_init_attr attr;
@@ -515,7 +515,7 @@ int main(int argc, char **argv)
 		memset(ctx.recv_buf, 0, 16);
 
 		printf("rdma_client: start\n");
-		ret = rq_run(&ctx);
+		ret = rq_run_client(&ctx);
 		printf("rdma_client: end %d\n", ret);
 		return ret;
 	} else {
