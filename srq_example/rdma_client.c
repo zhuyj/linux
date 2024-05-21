@@ -483,6 +483,7 @@ static int run(void)
 
 int main(int argc, char **argv)
 {
+	//ret is declared twice
 	int op, ret;
 
 	while ((op = getopt(argc, argv, "s:p:e:")) != -1) {
