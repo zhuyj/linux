@@ -402,7 +402,7 @@ int srq_run_server(struct context *ctx, struct rdma_addrinfo *rai)
 	return 0;
 }
 
-static int rq_run(struct context *ctx)
+static int rq_run_server(struct context *ctx)
 {
 	struct rdma_addrinfo hints, *res;
 	struct ibv_qp_init_attr init_attr;
@@ -557,7 +557,7 @@ int main(int argc, char **argv)
 		memset(ctx.recv_buf, 0, 16);
 
 		printf("rdma_server: rq start\n");
-		ret = rq_run(&ctx);
+		ret = rq_run_server(&ctx);
 		printf("rdma_server: rq end %d\n", ret);
 	} else {
 		struct rdma_addrinfo *rai, hints;
