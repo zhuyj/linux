@@ -37,15 +37,15 @@
 #include <rdma/rdma_verbs.h>
 #include <stdbool.h>
 
-static char *server_name = "127.0.0.1";
-static char *server_port = "7471";
+//static char *server_name = "127.0.0.1";
+//static char *server_port = "7471";
 static bool enable_srq = false;
 
-static struct rdma_cm_id *rq_id;
-static struct ibv_mr *recv_mr, *send_mr;
+//static struct rdma_cm_id *rq_id;
+//static struct ibv_mr *recv_mr, *send_mr;
 static int send_flags;
-static uint8_t send_buf[16];
-static uint8_t recv_buf[16];
+//static uint8_t send_buf[16];
+//static uint8_t recv_buf[16];
 
 #define VERB_ERR(verb, ret) \
         fprintf(stderr, "%s returned %d errno %d\n", verb, ret, errno)
@@ -386,7 +386,7 @@ int srq_run_client(struct context *ctx, struct rdma_addrinfo *rai)
 	return ret;
 }
 
-static int srq_run(void)
+static int rq_run(struct context *ctx)
 {
 	struct rdma_addrinfo hints, *res;
 	struct ibv_qp_init_attr attr;
@@ -395,7 +395,7 @@ static int srq_run(void)
 
 	memset(&hints, 0, sizeof hints);
 	hints.ai_port_space = RDMA_PS_TCP;
-	ret = rdma_getaddrinfo(server_name, server_port, &hints, &res);
+	ret = rdma_getaddrinfo(ctx->server_name, ctx->server_port, &hints, &res);
 	if (ret) {
 		printf("rdma_getaddrinfo: %s\n", gai_strerror(ret));
 		goto out;
@@ -405,9 +405,9 @@ static int srq_run(void)
 	attr.cap.max_send_wr = attr.cap.max_recv_wr = 1;
 	attr.cap.max_send_sge = attr.cap.max_recv_sge = 1;
 	attr.cap.max_inline_data = 16;
-	attr.qp_context = rq_id;
+	attr.qp_context = ctx->srq_rq_id;
 	attr.sq_sig_all = 1;
-	ret = rdma_create_ep(&rq_id, res, NULL, &attr);
+	ret = rdma_create_ep(&ctx->srq_rq_id, res, NULL, &attr);
 	// Check to see if we got inline data allowed or not
 	if (attr.cap.max_inline_data >= 16)
 		send_flags = IBV_SEND_INLINE;
@@ -420,60 +420,60 @@ static int srq_run(void)
 		goto out_free_addrinfo;
 	}
 
-	recv_mr = rdma_reg_msgs(rq_id, recv_buf, 16);
-	if (!recv_mr) {
+	ctx->recv_mr = rdma_reg_msgs(ctx->srq_rq_id, ctx->recv_buf, 16);
+	if (!ctx->recv_mr) {
 		perror("rdma_reg_msgs for recv_msg");
 		ret = -1;
 		goto out_destroy_ep;
 	}
 	if ((send_flags & IBV_SEND_INLINE) == 0) {
-		send_mr = rdma_reg_msgs(rq_id, send_buf, 16);
-		if (!send_mr) {
+		ctx->send_mr = rdma_reg_msgs(ctx->srq_rq_id, ctx->send_buf, 16);
+		if (!ctx->send_mr) {
 			perror("rdma_reg_msgs for send_msg");
 			ret = -1;
 			goto out_dereg_recv;
 		}
 	}
 
-	ret = rdma_post_recv(rq_id, NULL, recv_buf, 16, recv_mr);
+	ret = rdma_post_recv(ctx->srq_rq_id, NULL, ctx->recv_buf, 16, ctx->recv_mr);
 	if (ret) {
 		perror("rdma_post_recv");
 		goto out_dereg_send;
 	}
 
-	ret = rdma_connect(rq_id, NULL);
+	ret = rdma_connect(ctx->srq_rq_id, NULL);
 	if (ret) {
 		perror("rdma_connect");
 		goto out_dereg_send;
 	}
 
-	ret = rdma_post_send(rq_id, NULL, send_buf, 16, send_mr, send_flags);
+	ret = rdma_post_send(ctx->srq_rq_id, NULL, ctx->send_buf, 16, ctx->send_mr, send_flags);
 	if (ret) {
 		perror("rdma_post_send");
 		goto out_disconnect;
 	}
 
-	while ((ret = rdma_get_send_comp(rq_id, &wc)) == 0) ;
+	while ((ret = rdma_get_send_comp(ctx->srq_rq_id, &wc)) == 0) ;
 	if (ret < 0) {
 		perror("rdma_get_send_comp");
 		goto out_disconnect;
 	}
 
-	while ((ret = rdma_get_recv_comp(rq_id, &wc)) == 0) ;
+	while ((ret = rdma_get_recv_comp(ctx->srq_rq_id, &wc)) == 0) ;
 	if (ret < 0)
 		perror("rdma_get_recv_comp");
 	else
 		ret = 0;
 
  out_disconnect:
-	rdma_disconnect(rq_id);
+	rdma_disconnect(ctx->srq_rq_id);
  out_dereg_send:
 	if ((send_flags & IBV_SEND_INLINE) == 0)
-		rdma_dereg_mr(send_mr);
+		rdma_dereg_mr(ctx->send_mr);
  out_dereg_recv:
-	rdma_dereg_mr(recv_mr);
+	rdma_dereg_mr(ctx->recv_mr);
  out_destroy_ep:
-	rdma_destroy_ep(rq_id);
+	rdma_destroy_ep(ctx->srq_rq_id);
  out_free_addrinfo:
 	rdma_freeaddrinfo(res);
  out:
@@ -482,8 +482,9 @@ static int srq_run(void)
 
 int main(int argc, char **argv)
 {
-	//ret is declared twice
 	int op, ret;
+	char *server_name = NULL;
+	char *server_port = "7471";
 
 	while ((op = getopt(argc, argv, "s:p:e")) != -1) {
 		switch (op) {
@@ -506,8 +507,22 @@ int main(int argc, char **argv)
 	}
 
 	if (!enable_srq) {
+		struct context ctx;
+		memset(&ctx, 0, sizeof (ctx));
+		ctx.server_port = server_port;
+		ctx.server_name = server_name;
+		if (ctx.server_name == NULL) {
+			printf("server address required (use -a)!\n");
+			exit(1);
+		}
+
+		ctx.send_buf = (char *) malloc(16);
+		memset(ctx.send_buf, 0, 16);
+		ctx.recv_buf = (char *) malloc(16);
+		memset(ctx.recv_buf, 0, 16);
+
 		printf("rdma_client: start\n");
-		ret = srq_run();
+		ret = rq_run(&ctx);
 		printf("rdma_client: end %d\n", ret);
 		return ret;
 	} else {
