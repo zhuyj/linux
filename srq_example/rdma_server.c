@@ -51,10 +51,9 @@ static uint8_t recv_msg[16];
         fprintf(stderr, "%s returned %d errno %d\n", verb, ret, errno)
 
 /* Default parameters values */
-#define DEFAULT_PORT "51216"
 #define DEFAULT_MSG_COUNT 100
 #define DEFAULT_MSG_LENGTH 100000
-#define DEFAULT_QP_COUNT 40
+#define DEFAULT_QP_COUNT 128
 #define DEFAULT_MAX_WR 64
 
 /* Resources used in the example */
@@ -558,7 +557,7 @@ int main(int argc, char **argv)
 		memset(&ctx, 0, sizeof(ctx));
 		memset(&hints, 0, sizeof(hints));
 
-		ctx.server_port = DEFAULT_PORT;
+		ctx.server_port = port;
 		ctx.msg_count = DEFAULT_MSG_COUNT;
 		ctx.msg_length = DEFAULT_MSG_LENGTH;
 		ctx.qp_count = DEFAULT_QP_COUNT;
