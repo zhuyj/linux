@@ -551,7 +551,6 @@ int main(int argc, char **argv)
 		ret = run();
 		printf("rdma_server: rq end %d\n", ret);
 	} else {
-		int op;
 		struct context ctx;
 		struct rdma_addrinfo *rai, hints;
 
