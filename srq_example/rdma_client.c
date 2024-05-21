@@ -41,7 +41,7 @@ static char *server_name = "127.0.0.1";
 static char *server_port = "7471";
 static bool enable_srq = false;
 
-static struct rdma_cm_id *id;
+static struct rdma_cm_id *rq_id;
 static struct ibv_mr *recv_mr, *send_mr;
 static int send_flags;
 static uint8_t send_buf[16];
@@ -67,7 +67,7 @@ struct context {
 	int max_wr;
 
 	/* Resources */
-	struct rdma_cm_id *srq_id;
+	struct rdma_cm_id *srq_rq_id;
 	struct rdma_cm_id **conn_id;
 	struct ibv_mr *send_mr;
 	struct ibv_mr *recv_mr;
@@ -100,7 +100,7 @@ int srq_init_resources(struct context *ctx, struct rdma_addrinfo *rai)
 	struct rdma_cm_id *id;
 
 	/* Create an ID used for creating/accessing our SRQ */
-	ret = rdma_create_id(NULL, &ctx->srq_id, NULL, RDMA_PS_TCP);
+	ret = rdma_create_id(NULL, &ctx->srq_rq_id, NULL, RDMA_PS_TCP);
 	if (ret) {
 		VERB_ERR("rdma_create_id", ret);
 		return ret;
@@ -108,7 +108,7 @@ int srq_init_resources(struct context *ctx, struct rdma_addrinfo *rai)
 
 	/* We need to bind the ID to a particular RDMA device
 	 * This is done by resolving the address or binding to the address */
-	ret = rdma_resolve_addr(ctx->srq_id, NULL, rai->ai_dst_addr, 1000);
+	ret = rdma_resolve_addr(ctx->srq_rq_id, NULL, rai->ai_dst_addr, 1000);
 	if (ret) {
 		VERB_ERR("rdma_resolve_addr", ret);
 		return ret;
@@ -116,14 +116,14 @@ int srq_init_resources(struct context *ctx, struct rdma_addrinfo *rai)
 
 	/* Create the memory regions being used in this example */
 	ctx->recv_mr =
-	    rdma_reg_msgs(ctx->srq_id, ctx->recv_buf, ctx->msg_length);
+	    rdma_reg_msgs(ctx->srq_rq_id, ctx->recv_buf, ctx->msg_length);
 	if (!ctx->recv_mr) {
 		VERB_ERR("rdma_reg_msgs", -1);
 		return -1;
 	}
 
 	ctx->send_mr =
-	    rdma_reg_msgs(ctx->srq_id, ctx->send_buf, ctx->msg_length);
+	    rdma_reg_msgs(ctx->srq_rq_id, ctx->send_buf, ctx->msg_length);
 	if (!ctx->send_mr) {
 		VERB_ERR("rdma_reg_msgs", -1);
 		return -1;
@@ -135,19 +135,19 @@ int srq_init_resources(struct context *ctx, struct rdma_addrinfo *rai)
 	srq_attr.attr.max_wr = ctx->max_wr;
 	srq_attr.attr.max_sge = 1;
 
-	ret = rdma_create_srq(ctx->srq_id, NULL, &srq_attr);
+	ret = rdma_create_srq(ctx->srq_rq_id, NULL, &srq_attr);
 	if (ret) {
 		VERB_ERR("rdma_create_srq", ret);
 		return -1;
 	}
 
 	/* Save the SRQ in our context so we can assign it to other QPs later */
-	ctx->srq = ctx->srq_id->srq;
+	ctx->srq = ctx->srq_rq_id->srq;
 
 	/* Post our receive buffers on the SRQ */
 	for (i = 0; i < ctx->max_wr; i++) {
 		ret =
-		    rdma_post_recv(ctx->srq_id, NULL, ctx->recv_buf,
+		    rdma_post_recv(ctx->srq_rq_id, NULL, ctx->recv_buf,
 				   ctx->msg_length, ctx->recv_mr);
 		if (ret) {
 			VERB_ERR("rdma_post_recv", ret);
@@ -157,14 +157,14 @@ int srq_init_resources(struct context *ctx, struct rdma_addrinfo *rai)
 	}
 
 	/* Create a completion channel to use with the SRQ CQ */
-	ctx->srq_cq_channel = ibv_create_comp_channel(ctx->srq_id->verbs);
+	ctx->srq_cq_channel = ibv_create_comp_channel(ctx->srq_rq_id->verbs);
 	if (!ctx->srq_cq_channel) {
 		VERB_ERR("ibv_create_comp_channel", -1);
 		return -1;
 	}
 
 	/* Create a CQ to use for all connections (QPs) that use the SRQ */
-	ctx->srq_cq = ibv_create_cq(ctx->srq_id->verbs, ctx->max_wr, NULL,
+	ctx->srq_cq = ibv_create_cq(ctx->srq_rq_id->verbs, ctx->max_wr, NULL,
 				    ctx->srq_cq_channel, 0);
 	if (!ctx->srq_cq) {
 		VERB_ERR("ibv_create_cq", -1);
@@ -229,9 +229,9 @@ void srq_destroy_resources(struct context *ctx)
 	if (ctx->srq_cq_channel)
 		ibv_destroy_comp_channel(ctx->srq_cq_channel);
 
-	if (ctx->srq_id) {
-		rdma_destroy_srq(ctx->srq_id);
-		rdma_destroy_id(ctx->srq_id);
+	if (ctx->srq_rq_id) {
+		rdma_destroy_srq(ctx->srq_rq_id);
+		rdma_destroy_id(ctx->srq_rq_id);
 	}
 }
 
@@ -372,7 +372,7 @@ int srq_run_client(struct context *ctx, struct rdma_addrinfo *rai)
 			recv_count++;
 			printf("recv count: %lu\n", recv_count);
 
-			ret = rdma_post_recv(ctx->srq_id, (void *)wc.wr_id,
+			ret = rdma_post_recv(ctx->srq_rq_id, (void *)wc.wr_id,
 					     ctx->recv_buf, ctx->msg_length,
 					     ctx->recv_mr);
 			if (ret) {
@@ -405,9 +405,9 @@ static int srq_run(void)
 	attr.cap.max_send_wr = attr.cap.max_recv_wr = 1;
 	attr.cap.max_send_sge = attr.cap.max_recv_sge = 1;
 	attr.cap.max_inline_data = 16;
-	attr.qp_context = id;
+	attr.qp_context = rq_id;
 	attr.sq_sig_all = 1;
-	ret = rdma_create_ep(&id, res, NULL, &attr);
+	ret = rdma_create_ep(&rq_id, res, NULL, &attr);
 	// Check to see if we got inline data allowed or not
 	if (attr.cap.max_inline_data >= 16)
 		send_flags = IBV_SEND_INLINE;
@@ -420,14 +420,14 @@ static int srq_run(void)
 		goto out_free_addrinfo;
 	}
 
-	recv_mr = rdma_reg_msgs(id, recv_buf, 16);
+	recv_mr = rdma_reg_msgs(rq_id, recv_buf, 16);
 	if (!recv_mr) {
 		perror("rdma_reg_msgs for recv_msg");
 		ret = -1;
 		goto out_destroy_ep;
 	}
 	if ((send_flags & IBV_SEND_INLINE) == 0) {
-		send_mr = rdma_reg_msgs(id, send_buf, 16);
+		send_mr = rdma_reg_msgs(rq_id, send_buf, 16);
 		if (!send_mr) {
 			perror("rdma_reg_msgs for send_msg");
 			ret = -1;
@@ -435,45 +435,45 @@ static int srq_run(void)
 		}
 	}
 
-	ret = rdma_post_recv(id, NULL, recv_buf, 16, recv_mr);
+	ret = rdma_post_recv(rq_id, NULL, recv_buf, 16, recv_mr);
 	if (ret) {
 		perror("rdma_post_recv");
 		goto out_dereg_send;
 	}
 
-	ret = rdma_connect(id, NULL);
+	ret = rdma_connect(rq_id, NULL);
 	if (ret) {
 		perror("rdma_connect");
 		goto out_dereg_send;
 	}
 
-	ret = rdma_post_send(id, NULL, send_buf, 16, send_mr, send_flags);
+	ret = rdma_post_send(rq_id, NULL, send_buf, 16, send_mr, send_flags);
 	if (ret) {
 		perror("rdma_post_send");
 		goto out_disconnect;
 	}
 
-	while ((ret = rdma_get_send_comp(id, &wc)) == 0) ;
+	while ((ret = rdma_get_send_comp(rq_id, &wc)) == 0) ;
 	if (ret < 0) {
 		perror("rdma_get_send_comp");
 		goto out_disconnect;
 	}
 
-	while ((ret = rdma_get_recv_comp(id, &wc)) == 0) ;
+	while ((ret = rdma_get_recv_comp(rq_id, &wc)) == 0) ;
 	if (ret < 0)
 		perror("rdma_get_recv_comp");
 	else
 		ret = 0;
 
  out_disconnect:
-	rdma_disconnect(id);
+	rdma_disconnect(rq_id);
  out_dereg_send:
 	if ((send_flags & IBV_SEND_INLINE) == 0)
 		rdma_dereg_mr(send_mr);
  out_dereg_recv:
 	rdma_dereg_mr(recv_mr);
  out_destroy_ep:
-	rdma_destroy_ep(id);
+	rdma_destroy_ep(rq_id);
  out_free_addrinfo:
 	rdma_freeaddrinfo(res);
  out:
