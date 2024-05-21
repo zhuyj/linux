@@ -326,7 +326,7 @@ int run_client(struct context *ctx, struct rdma_addrinfo *rai)
             }
  
             send_count++;
-            printf("send count: %d, qp_num: %d\n", send_count, wc.qp_num);
+            printf("send count: %lu, qp_num: %d\n", send_count, wc.qp_num);
         }
  
         /* wait for a recv indicating that all buffers were processed */
@@ -352,7 +352,7 @@ int run_client(struct context *ctx, struct rdma_addrinfo *rai)
             }
  
             recv_count++;
-            printf("recv count: %d\n", recv_count);
+            printf("recv count: %lu\n", recv_count);
  
             ret = rdma_post_recv(ctx->srq_id, (void *) wc.wr_id,
                                  ctx->recv_buf, ctx->msg_length, ctx->recv_mr);

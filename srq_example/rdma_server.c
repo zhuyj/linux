@@ -42,7 +42,7 @@ static char *port = "7471";
 static bool enable_srq = false;
 
 static struct rdma_cm_id *listen_id, *id;
-static struct ibv_mr *mr, *send_mr;
+static struct ibv_mr *recv_mr, *send_mr;
 static int send_flags;
 static uint8_t send_msg[16];
 static uint8_t recv_msg[16];
@@ -366,7 +366,7 @@ int srq_run_server(struct context *ctx, struct rdma_addrinfo *rai)
 				}
 
 				recv_count++;
-				printf("recv count: %d, qp_num: %d\n",
+				printf("recv count: %lu, qp_num: %d\n",
 				       recv_count, wc.qp_num);
 
 				ret =
@@ -401,7 +401,7 @@ int srq_run_server(struct context *ctx, struct rdma_addrinfo *rai)
 		}
 
 		send_count++;
-		printf("send count: %d\n", send_count);
+		printf("send count: %lu\n", send_count);
 	}
 
 	return 0;
@@ -460,8 +460,8 @@ static int run(void)
 		printf("rdma_server: device doesn't support IBV_SEND_INLINE, "
 		       "using sge sends\n");
 
-	mr = rdma_reg_msgs(id, recv_msg, 16);
-	if (!mr) {
+	recv_mr = rdma_reg_msgs(id, recv_msg, 16);
+	if (!recv_mr) {
 		ret = -1;
 		perror("rdma_reg_msgs for recv_msg");
 		goto out_destroy_accept_ep;
@@ -475,7 +475,7 @@ static int run(void)
 		}
 	}
 
-	ret = rdma_post_recv(id, NULL, recv_msg, 16, mr);
+	ret = rdma_post_recv(id, NULL, recv_msg, 16, recv_mr);
 	if (ret) {
 		perror("rdma_post_recv");
 		goto out_dereg_send;
@@ -511,7 +511,7 @@ static int run(void)
 	if ((send_flags & IBV_SEND_INLINE) == 0)
 		rdma_dereg_mr(send_mr);
  out_dereg_recv:
-	rdma_dereg_mr(mr);
+	rdma_dereg_mr(recv_mr);
  out_destroy_accept_ep:
 	rdma_destroy_ep(id);
  out_destroy_listen_ep:
