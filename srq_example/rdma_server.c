@@ -37,15 +37,9 @@
 #include <rdma/rdma_verbs.h>
 #include <stdbool.h>
 
-//static char *server_name = "0.0.0.0";
-//static char *server_port = "7471";
 static bool enable_srq = false;
 
-//static struct rdma_cm_id *listen_id, *rq_id;
-//static struct ibv_mr *recv_mr, *send_mr;
 static int send_flags;
-//static uint8_t send_buf[16];
-//static uint8_t recv_buf[16];
 
 #define VERB_ERR(verb, ret) \
         fprintf(stderr, "%s returned %d errno %d\n", verb, ret, errno)
@@ -524,17 +518,20 @@ static int rq_run(struct context *ctx)
 
 int main(int argc, char **argv)
 {
+	struct context ctx;
 	int op, ret;
-	char *server_name = NULL;
-	char *server_port = "7471";
+
+	memset(&ctx, 0, sizeof(ctx));
+	ctx.server_port = "7471";
+	ctx.server_name = NULL;
 
 	while ((op = getopt(argc, argv, "s:p:e")) != -1) {
 		switch (op) {
 		case 's':
-			server_name = optarg;
+			ctx.server_name = optarg;
 			break;
 		case 'p':
-			server_port = optarg;
+			ctx.server_port = optarg;
 			break;
 		case 'e':
 			enable_srq = true;
@@ -549,11 +546,6 @@ int main(int argc, char **argv)
 	}
 
 	if (!enable_srq) {
-		struct context ctx;
-
-		memset(&ctx, 0, sizeof(ctx));
-		ctx.server_port = server_port;
-		ctx.server_name = server_name;
 		if (ctx.server_name == NULL) {
 			printf("server address required (use -s)!\n");
 			exit(1);
@@ -568,18 +560,14 @@ int main(int argc, char **argv)
 		ret = rq_run(&ctx);
 		printf("rdma_server: rq end %d\n", ret);
 	} else {
-		struct context ctx;
 		struct rdma_addrinfo *rai, hints;
 
-		memset(&ctx, 0, sizeof(ctx));
 		memset(&hints, 0, sizeof(hints));
 
-		ctx.server_port = server_port;
 		ctx.msg_count = DEFAULT_MSG_COUNT;
 		ctx.msg_length = DEFAULT_MSG_LENGTH;
 		ctx.qp_count = DEFAULT_QP_COUNT;
 		ctx.max_wr = DEFAULT_MAX_WR;
-		ctx.server_name = server_name;
 
 		if (ctx.server_name == NULL) {
 			printf("server address required (use -s)!\n");
