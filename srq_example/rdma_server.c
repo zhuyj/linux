@@ -408,7 +408,7 @@ int srq_run_server(struct context *ctx, struct rdma_addrinfo *rai)
 	return 0;
 }
 
-static int run(void)
+static int rq_run(void)
 {
 	struct rdma_addrinfo hints, *res;
 	struct ibv_qp_init_attr init_attr;
@@ -548,7 +548,7 @@ int main(int argc, char **argv)
 
 	if (!enable_srq) {
 		printf("rdma_server: rq start\n");
-		ret = run();
+		ret = rq_run();
 		printf("rdma_server: rq end %d\n", ret);
 	} else {
 		struct context ctx;
