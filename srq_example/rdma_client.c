@@ -147,7 +147,6 @@ int srq_init_resources(struct context *ctx, struct rdma_addrinfo *rai)
 			VERB_ERR("rdma_post_recv", ret);
 			return ret;
 		}
-		fprintf(stderr, "recv: %d, %s\n\n", ret, ctx->recv_buf);
 	}
 
 	/* Create a completion channel to use with the SRQ CQ */
