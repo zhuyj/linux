@@ -84,6 +84,9 @@ struct rtrs_ib_dev {
 	struct kref		 ref;
 	struct list_head	 entry;
 	struct rtrs_rdma_dev_pd *pool;
+	struct ib_srq		*srq;
+	int			srq_size; /* default: 4096 */
+	bool			use_srq;
 };
 
 struct rtrs_con {
