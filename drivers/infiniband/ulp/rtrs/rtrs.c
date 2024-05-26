@@ -18,6 +18,94 @@
 MODULE_DESCRIPTION("RDMA Transport Core");
 MODULE_LICENSE("GPL");
 
+/**
+ * rtrs_srq_event - SRQ event callback function
+ * @event: Description of the event that occurred.
+ * @ctx: Context pointer specified at SRQ creation time.
+ */
+static void rtrs_srq_event(struct ib_event *event, void *ctx)
+{
+	pr_debug("SRQ event %d\n", event->event);
+}
+
+static void rtrs_free_srq(struct rtrs_ib_dev *ridev)
+{
+
+	if (!ridev->srq)
+		return;
+
+	ib_destroy_srq(ridev->srq);
+#if 0
+	srpt_free_ioctx_ring((struct srpt_ioctx **)sdev->ioctx_ring, sdev,
+			     sdev->srq_size, sdev->req_buf_cache,
+			     DMA_FROM_DEVICE);
+	kmem_cache_destroy(sdev->req_buf_cache);
+#endif
+	ridev->srq = NULL;
+}
+
+static int rtrs_alloc_srq(struct rtrs_ib_dev *ri_dev)
+{
+	struct ib_srq_init_attr srq_attr = {
+		.event_handler = rtrs_srq_event,
+		.srq_context = (void *)ri_dev,
+		.attr.max_wr = ri_dev->srq_size,
+		.attr.max_sge = 1,
+		.srq_type = IB_SRQT_BASIC,
+	};
+
+//	struct ib_device *device = ri_dev->ib_dev;
+	struct ib_srq *srq;
+//	int i;
+
+	if (!ri_dev->use_srq)
+		return 0;
+
+	WARN_ON_ONCE(ri_dev->srq);
+	srq = ib_create_srq(ri_dev->ib_pd, &srq_attr);
+
+	if (IS_ERR(srq)) {
+		pr_debug("ib_create_srq() failed: %ld\n", PTR_ERR(srq));
+		return PTR_ERR(srq);
+	}
+#if 0
+	pr_debug("create SRQ #wr= %d max_allow=%d dev= %s\n", sdev->srq_size,
+		 sdev->device->attrs.max_srq_wr, dev_name(&device->dev));
+
+	sdev->req_buf_cache = kmem_cache_create("srpt-srq-req-buf",
+						srp_max_req_size, 0, 0, NULL);
+	if (!sdev->req_buf_cache)
+		goto free_srq;
+
+	sdev->ioctx_ring = (struct srpt_recv_ioctx **)
+		srpt_alloc_ioctx_ring(sdev, sdev->srq_size,
+				      sizeof(*sdev->ioctx_ring[0]),
+				      sdev->req_buf_cache, 0, DMA_FROM_DEVICE);
+	if (!sdev->ioctx_ring)
+		goto free_cache;
+
+	sdev->use_srq = true;
+	sdev->srq = srq;
+
+	for (i = 0; i < sdev->srq_size; ++i) {
+		INIT_LIST_HEAD(&sdev->ioctx_ring[i]->wait_list);
+		srpt_post_recv(sdev, NULL, sdev->ioctx_ring[i]);
+	}
+
+	return 0;
+
+free_cache:
+	kmem_cache_destroy(sdev->req_buf_cache);
+
+free_srq:
+	ib_destroy_srq(srq);
+
+	return -ENOMEM;
+#endif
+	return 0;
+}
+
+
 struct rtrs_iu *rtrs_iu_alloc(u32 iu_num, size_t size, gfp_t gfp_mask,
 			      struct ib_device *dma_dev,
 			      enum dma_data_direction dir,
@@ -311,12 +399,14 @@ int rtrs_cq_qp_create(struct rtrs_path *path, struct rtrs_con *con,
 	}
 	con->path = path;
 
+	rtrs_alloc_srq(path->dev);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(rtrs_cq_qp_create);
 
 void rtrs_cq_qp_destroy(struct rtrs_con *con)
 {
+	rtrs_free_srq(con->path->dev);
 	if (con->qp) {
 		rdma_destroy_qp(con->cm_id);
 		con->qp = NULL;
