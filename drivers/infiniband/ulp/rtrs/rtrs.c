@@ -178,6 +178,9 @@ int rtrs_iu_post_recv(struct rtrs_con *con, struct rtrs_iu *iu)
 		.num_sge = 1,
 	};
 
+	if (con->path->dev->use_srq)
+		return ib_post_srq_recv(con->path->dev->srq, &wr, NULL);
+
 	return ib_post_recv(con->qp, &wr, NULL);
 }
 EXPORT_SYMBOL_GPL(rtrs_iu_post_recv);
