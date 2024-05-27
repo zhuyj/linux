@@ -35,12 +35,6 @@ static void rtrs_free_srq(struct rtrs_ib_dev *ridev)
 		return;
 
 	ib_destroy_srq(ridev->srq);
-#if 0
-	srpt_free_ioctx_ring((struct srpt_ioctx **)sdev->ioctx_ring, sdev,
-			     sdev->srq_size, sdev->req_buf_cache,
-			     DMA_FROM_DEVICE);
-	kmem_cache_destroy(sdev->req_buf_cache);
-#endif
 	ridev->srq = NULL;
 }
 
@@ -54,9 +48,7 @@ static int rtrs_alloc_srq(struct rtrs_ib_dev *ri_dev)
 		.srq_type = IB_SRQT_BASIC,
 	};
 
-//	struct ib_device *device = ri_dev->ib_dev;
 	struct ib_srq *srq;
-//	int i;
 
 	if (!ri_dev->use_srq)
 		return 0;
@@ -68,6 +60,7 @@ static int rtrs_alloc_srq(struct rtrs_ib_dev *ri_dev)
 		pr_debug("ib_create_srq() failed: %ld\n", PTR_ERR(srq));
 		return PTR_ERR(srq);
 	}
+	ri_dev->srq = srq;
 #if 0
 	pr_debug("create SRQ #wr= %d max_allow=%d dev= %s\n", sdev->srq_size,
 		 sdev->device->attrs.max_srq_wr, dev_name(&device->dev));
@@ -192,6 +185,9 @@ int rtrs_post_recv_empty(struct rtrs_con *con, struct ib_cqe *cqe)
 	wr = (struct ib_recv_wr) {
 		.wr_cqe  = cqe,
 	};
+
+	if (con->path->dev->use_srq)
+		return ib_post_srq_recv(con->path->dev->srq, &wr, NULL);
 
 	return ib_post_recv(con->qp, &wr, NULL);
 }
