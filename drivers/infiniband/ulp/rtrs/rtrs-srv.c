@@ -1231,6 +1231,13 @@ static void rtrs_srv_rdma_done(struct ib_cq *cq, struct ib_wc *wc)
 		return;
 	}
 
+	if (cq->device->ops.poll_cq) {
+		struct ib_wc wc_poll = {};
+
+		while (ib_poll_cq(cq, 16, &wc_poll) == 16)
+			;
+	}
+
 	switch (wc->opcode) {
 	case IB_WC_RECV_RDMA_WITH_IMM:
 		/*
