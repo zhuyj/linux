@@ -86,6 +86,8 @@ struct rtrs_ib_dev {
 	struct list_head	 entry;
 	struct rtrs_rdma_dev_pd *pool;
 	struct ib_event_handler	event_handler;
+	struct ib_srq		*srq;
+	bool			use_srq;
 };
 
 struct rtrs_con {
@@ -370,6 +372,14 @@ static inline void rtrs_from_io_rsp_imm(u32 payload, u32 *msg_id, int *errno)
 	/* 9 bits for errno, 19 bits for msg_id */
 	*msg_id = payload & 0x7ffff;
 	*errno = -(int)((payload >> 19) & 0x1ff);
+}
+
+static inline bool rtrs_srq_valid(struct rtrs_ib_dev *ridev)
+{
+	if (ridev && ridev->use_srq && ridev->srq)
+		return true;
+
+	return false;
 }
 
 #define STAT_STORE_FUNC(type, set_value, reset)				\

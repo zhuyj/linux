@@ -17,6 +17,76 @@
 
 MODULE_DESCRIPTION("RDMA Transport Core");
 MODULE_LICENSE("GPL");
+/**
+ *  * rtrs_srq_event - SRQ event callback function
+ *   * @event: Description of the event that occurred.
+ *    * @ctx: Context pointer specified at SRQ creation time.
+ *     */
+static void rtrs_srq_event(struct ib_event *event, void *ctx)
+{
+	switch (event->event) {
+	case IB_EVENT_SRQ_ERR:
+		pr_err("RTRS: event IB_EVENT_SRQ_ERR unhandled\n");
+		break;
+	case IB_EVENT_SRQ_LIMIT_REACHED:
+		pr_err("RTRS: reach SRQ_LIMIT, need to increase the value of sge\n");
+		break;
+	default:
+		break;
+	}
+}
+
+static void rtrs_free_srq(struct rtrs_ib_dev *ridev)
+{
+	if (!(rtrs_srq_valid(ridev)))
+		return;
+
+	ib_destroy_srq(ridev->srq);
+	ridev->srq = NULL;
+}
+
+static int rtrs_alloc_srq(struct rtrs_ib_dev *ri_dev)
+{
+	struct ib_srq_init_attr srq_attr = {
+		.event_handler = rtrs_srq_event,
+		.srq_context = (void *)ri_dev,
+		.attr.max_wr = ri_dev->ib_dev->attrs.max_srq_wr,
+		.attr.max_sge = ri_dev->ib_dev->attrs.max_srq_sge,
+		.attr.srq_limit = ri_dev->ib_dev->attrs.max_srq_sge / 3,
+		.srq_type = IB_SRQT_BASIC,
+	};
+
+	if (!ri_dev->use_srq) {
+		ri_dev->srq = NULL;
+		return 0;
+	}
+
+	pr_info_once("SRQ in rtrs is in experimental stage\n");
+
+	if (ri_dev->srq) {
+		pr_warn("File: %s +%d func: %s, ib dev %s srq\n",
+				__FILE__, __LINE__, __func__, ri_dev->ib_dev->name);
+		return 0;
+	}
+
+	pr_warn("File: %s +%d func: %s, ib dev %s create srq\n",
+		__FILE__, __LINE__, __func__, ri_dev->ib_dev->name);
+
+	if (!ri_dev->ib_pd) {
+		pr_warn("srq, file: %s +%d func: %s, pd NULL\n", __FILE__, __LINE__, __func__);
+		WARN_ON_ONCE(1);
+		return -EINVAL;
+	}
+
+	ri_dev->srq = ib_create_srq(ri_dev->ib_pd, &srq_attr);
+
+	if (IS_ERR(ri_dev->srq)) {
+		pr_debug("ib_create_srq() failed: %ld\n", PTR_ERR(ri_dev->srq));
+		return PTR_ERR(ri_dev->srq);
+	}
+
+	return 0;
+}
 
 struct rtrs_iu *rtrs_iu_alloc(u32 iu_num, size_t size, gfp_t gfp_mask,
 			      struct ib_device *dma_dev,
@@ -90,6 +160,9 @@ int rtrs_iu_post_recv(struct rtrs_con *con, struct rtrs_iu *iu)
 		.num_sge = 1,
 	};
 
+	if (rtrs_srq_valid(con->path->dev))
+		return ib_post_srq_recv(con->path->dev->srq, &wr, NULL);
+
 	return ib_post_recv(con->qp, &wr, NULL);
 }
 EXPORT_SYMBOL_GPL(rtrs_iu_post_recv);
@@ -101,6 +174,9 @@ int rtrs_post_recv_empty(struct rtrs_con *con, struct ib_cqe *cqe)
 	wr = (struct ib_recv_wr) {
 		.wr_cqe  = cqe,
 	};
+
+	if (rtrs_srq_valid(con->path->dev))
+		return ib_post_srq_recv(con->path->dev->srq, &wr, NULL);
 
 	return ib_post_recv(con->qp, &wr, NULL);
 }
@@ -270,6 +346,10 @@ static int create_qp(struct rtrs_con *con, struct ib_pd *pd,
 	init_attr.send_cq = con->cq;
 	init_attr.recv_cq = con->cq;
 	init_attr.sq_sig_type = IB_SIGNAL_REQ_WR;
+	if (rtrs_srq_valid(con->path->dev)) {
+		init_attr.srq = con->path->dev->srq;
+		init_attr.cap.max_recv_wr = 0;
+	}
 
 	ret = rdma_create_qp(cm_id, pd, &init_attr);
 	if (ret) {
@@ -303,9 +383,17 @@ int rtrs_cq_qp_create(struct rtrs_path *path, struct rtrs_con *con,
 	if (err)
 		return err;
 
+	err = rtrs_alloc_srq(path->dev);
+	if (err) {
+		pr_warn("File: %s +%d func: %s, srq alloc failed: %d\n",
+				__FILE__, __LINE__, __func__, err);
+		return err;
+	}
+
 	err = create_qp(con, path->dev->ib_pd, max_send_wr, max_recv_wr,
 			max_send_sge);
 	if (err) {
+		rtrs_free_srq(path->dev);
 		destroy_cq(con);
 		return err;
 	}
@@ -321,6 +409,11 @@ void rtrs_cq_qp_destroy(struct rtrs_con *con)
 		rdma_destroy_qp(con->cm_id);
 		con->qp = NULL;
 	}
+
+	if (con->path && rtrs_srq_valid(con->path->dev) &&
+		!atomic_read(&con->path->dev->srq->usecnt))
+		rtrs_free_srq(con->path->dev);
+
 	destroy_cq(con);
 }
 EXPORT_SYMBOL_GPL(rtrs_cq_qp_destroy);

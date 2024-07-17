@@ -55,6 +55,12 @@ MODULE_PARM_DESC(sess_queue_depth,
 		 __stringify(MAX_SESS_QUEUE_DEPTH) " (default: "
 		 __stringify(DEFAULT_SESS_QUEUE_DEPTH) ")");
 
+/* The default of use_srq is false */
+static bool use_srq = true;
+module_param(use_srq, bool, 0444);
+MODULE_PARM_DESC(use_srq,
+		 "This is to enable/disable srq in IB. The server/client can be different (default: false).");
+
 static cpumask_t cq_affinity_mask = { CPU_BITS_ALL };
 
 static struct workqueue_struct *rtrs_wq;
@@ -2271,6 +2277,9 @@ static int rtrs_srv_ib_dev_init(struct rtrs_ib_dev *dev)
 	INIT_IB_EVENT_HANDLER(&dev->event_handler, dev->ib_dev,
 			      rtrs_srv_ib_event_handler);
 	ib_register_event_handler(&dev->event_handler);
+
+	dev->use_srq = use_srq;
+	dev->srq = NULL;
 
 	return 0;
 }

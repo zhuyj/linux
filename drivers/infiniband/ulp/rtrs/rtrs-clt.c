@@ -39,6 +39,12 @@
 MODULE_DESCRIPTION("RDMA Transport Client");
 MODULE_LICENSE("GPL");
 
+/* The default of use_srq is false */
+static bool use_srq = true;
+module_param(use_srq, bool, 0444);
+MODULE_PARM_DESC(use_srq,
+		 "This is to enable/disable srq in IB. The server/client can be different (default: false).");
+
 static const struct rtrs_rdma_dev_pd_ops dev_pd_ops;
 static struct rtrs_rdma_dev_pd dev_pd = {
 	.ops = &dev_pd_ops
@@ -596,6 +602,10 @@ static int rtrs_post_recv_empty_x2(struct rtrs_con *con, struct ib_cqe *cqe)
 			/* Chain backwards */
 			wr->next = &wr_arr[i - 1];
 	}
+
+	/* When use_srq is true and srq is not NULL, invoke ib_post_srq_recv */
+	if (rtrs_srq_valid(con->path->dev))
+		return ib_post_srq_recv(con->path->dev->srq, wr, NULL);
 
 	return ib_post_recv(con->qp, wr, NULL);
 }
@@ -3158,6 +3168,9 @@ static int rtrs_clt_ib_dev_init(struct rtrs_ib_dev *dev)
 		pr_err("Memory registrations not supported.\n");
 		return -ENOTSUPP;
 	}
+
+	dev->use_srq = use_srq;
+	dev->srq = NULL;
 
 	return 0;
 }
