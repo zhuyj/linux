@@ -51,6 +51,11 @@ MODULE_PARM_DESC(sess_queue_depth,
 		 __stringify(MAX_SESS_QUEUE_DEPTH) " (default: "
 		 __stringify(DEFAULT_SESS_QUEUE_DEPTH) ")");
 
+static bool enable_folio;
+module_param(enable_folio, bool, 0444);
+MODULE_PARM_DESC(enable_folio,
+		 "Control to use folio or not. Since folio is in development, default: false.");
+
 static cpumask_t cq_affinity_mask = { CPU_BITS_ALL };
 
 static struct workqueue_struct *rtrs_wq;
@@ -610,10 +615,17 @@ static int map_cont_bufs(struct rtrs_srv_path *srv_path)
 		if (err)
 			goto err;
 
-		for_each_sg(sgt->sgl, s, chunks_per_mr, i)
-			sg_set_folio(s, srv->chunks[chunks + i],
-				     max_chunk_size, 0);
-
+		if (enable_folio) {
+			for_each_sg(sgt->sgl, s, chunks_per_mr, i) {
+				sg_set_folio(s, srv->folio_chunks[chunks + i],
+						max_chunk_size, 0);
+			}
+		} else {
+			for_each_sg(sgt->sgl, s, chunks_per_mr, i) {
+				sg_set_page(s, srv->chunks[chunks + i],
+						max_chunk_size, 0);
+			}
+		}
 		nr_sgt = ib_dma_map_sg(srv_path->s.dev->ib_dev, sgt->sgl,
 				   sgt->nents, DMA_BIDIRECTIONAL);
 		if (!nr_sgt) {
@@ -1032,7 +1044,10 @@ static void process_read(struct rtrs_srv_con *con,
 	id->rd_msg	= msg;
 	usr_len = le16_to_cpu(msg->usr_len);
 	data_len = off - usr_len;
-	data = folio_address(srv->chunks[buf_id]);
+	if (enable_folio)
+		data = folio_address(srv->folio_chunks[buf_id]);
+	else
+		data = page_address(srv->chunks[buf_id]);
 	ret = ctx->ops.rdma_ev(srv->priv, id, data, data_len,
 			   data + data_len, usr_len);
 
@@ -1085,7 +1100,10 @@ static void process_write(struct rtrs_srv_con *con,
 
 	usr_len = le16_to_cpu(req->usr_len);
 	data_len = off - usr_len;
-	data = folio_address(srv->chunks[buf_id]);
+	if (enable_folio)
+		data = folio_address(srv->folio_chunks[buf_id]);
+	else
+		data = page_address(srv->chunks[buf_id]);
 	ret = ctx->ops.rdma_ev(srv->priv, id, data, data_len,
 			       data + data_len, usr_len);
 	if (ret) {
@@ -1160,7 +1178,10 @@ static void rtrs_srv_inv_rkey_done(struct ib_cq *cq, struct ib_wc *wc)
 	}
 	msg_id = mr->msg_id;
 	off = mr->msg_off;
-	data = folio_address(srv->chunks[msg_id]) + off;
+	if (enable_folio)
+		data = folio_address(srv->folio_chunks[msg_id]) + off;
+	else
+		data = page_address(srv->chunks[msg_id]) + off;
 	process_io_req(con, data, msg_id, off);
 }
 
@@ -1262,7 +1283,10 @@ static void rtrs_srv_rdma_done(struct ib_cq *cq, struct ib_wc *wc)
 					break;
 				}
 			} else {
-				data = folio_address(srv->chunks[msg_id]) + off;
+				if (enable_folio)
+					data = folio_address(srv->folio_chunks[msg_id]) + off;
+				else
+					data = page_address(srv->chunks[msg_id]) + off;
 				process_io_req(con, data, msg_id, off);
 			}
 		} else if (imm_type == RTRS_HB_MSG_IMM) {
@@ -1361,8 +1385,13 @@ static void free_srv(struct rtrs_srv_sess *srv)
 	int i;
 
 	WARN_ON(refcount_read(&srv->refcount));
-	for (i = 0; i < srv->queue_depth; i++)
-		folio_put(srv->chunks[i]);
+	if (enable_folio) {
+		for (i = 0; i < srv->queue_depth; i++)
+			folio_put(srv->folio_chunks[i]);
+	} else {
+		for (i = 0; i < srv->queue_depth; i++)
+			__free_pages(srv->chunks[i], get_order(max_chunk_size));
+	}
 	kfree(srv->chunks);
 	mutex_destroy(&srv->paths_mutex);
 	mutex_destroy(&srv->paths_ev_mutex);
@@ -1409,15 +1438,27 @@ static struct rtrs_srv_sess *get_or_create_srv(struct rtrs_srv_ctx *ctx,
 	device_initialize(&srv->dev);
 	srv->dev.release = rtrs_srv_dev_release;
 
-	srv->chunks = kcalloc(srv->queue_depth, sizeof(*srv->chunks), GFP_KERNEL);
-	if (!srv->chunks)
-		goto err_free_srv;
-
-	for (i = 0; i < srv->queue_depth; i++) {
-		srv->chunks[i] = folio_alloc(GFP_KERNEL,
-					     get_order(max_chunk_size));
-		if (!srv->chunks[i])
-			goto err_free_chunks;
+	if (enable_folio) {
+		pr_info("folio is in development\n");
+		srv->folio_chunks = kcalloc(srv->queue_depth, sizeof(*srv->folio_chunks),
+								GFP_KERNEL);
+		if (!srv->folio_chunks)
+			goto err_free_srv;
+		for (i = 0; i < srv->queue_depth; i++) {
+			srv->folio_chunks[i] = folio_alloc(GFP_KERNEL, get_order(max_chunk_size));
+			if (!srv->folio_chunks[i])
+				goto err_free_chunks;
+		}
+	} else {
+		srv->chunks = kcalloc(srv->queue_depth, sizeof(*srv->chunks), GFP_KERNEL);
+		if (!srv->chunks)
+			goto err_free_srv;
+		for (i = 0; i < srv->queue_depth; i++) {
+			srv->chunks[i] = alloc_pages(GFP_KERNEL,
+								get_order(max_chunk_size));
+			if (!srv->chunks[i])
+				goto err_free_chunks;
+		}
 	}
 
 	refcount_set(&srv->refcount, 1);
@@ -1428,8 +1469,13 @@ static struct rtrs_srv_sess *get_or_create_srv(struct rtrs_srv_ctx *ctx,
 	return srv;
 
 err_free_chunks:
-	while (i--)
-		folio_put(srv->chunks[i]);
+	if (enable_folio) {
+		while (i--)
+			folio_put(srv->folio_chunks[i]);
+	} else {
+		while (i--)
+			__free_pages(srv->chunks[i], get_order(max_chunk_size));
+	}
 
 	kfree(srv->chunks);
 
@@ -2260,10 +2306,10 @@ static int __init rtrs_server_init(void)
 {
 	int err;
 
-	pr_info("Loading module %s, proto %s: (max_chunk_size: %d (pure IO %ld, headers %ld) , sess_queue_depth: %d, always_invalidate: %d)\n",
+	pr_info("Loading module %s, proto %s: (max_chunk_size: %d (pure IO %ld, headers %ld) , sess_queue_depth: %d, always_invalidate: %d, enable_folio: %d)\n",
 		KBUILD_MODNAME, RTRS_PROTO_VER_STRING,
 		max_chunk_size, max_chunk_size - MAX_HDR_SIZE, MAX_HDR_SIZE,
-		sess_queue_depth, always_invalidate);
+		sess_queue_depth, always_invalidate, enable_folio);
 
 	rtrs_rdma_dev_pd_init(0, &dev_pd);
 

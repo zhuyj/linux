@@ -108,7 +108,8 @@ struct rtrs_srv_sess {
 	struct list_head	ctx_list;
 	void			*priv;
 	size_t			queue_depth;
-	struct folio		**chunks;
+	struct folio		**folio_chunks;
+	struct page			**chunks;
 	struct device		dev;
 	unsigned int		dev_ref;
 	struct kobject		*kobj_paths;
