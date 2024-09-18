@@ -50,7 +50,7 @@ static void ib_cq_rdma_dim_work(struct work_struct *w)
 	cq->device->ops.modify_cq(cq, comps, usec);
 }
 
-static void rdma_dim_init(struct ib_cq *cq)
+void rdma_dim_init(struct ib_cq *cq)
 {
 	struct dim *dim;
 
@@ -71,7 +71,7 @@ static void rdma_dim_init(struct ib_cq *cq)
 	INIT_WORK(&dim->work, ib_cq_rdma_dim_work);
 }
 
-static void rdma_dim_destroy(struct ib_cq *cq)
+void rdma_dim_destroy(struct ib_cq *cq)
 {
 	if (!cq->dim)
 		return;

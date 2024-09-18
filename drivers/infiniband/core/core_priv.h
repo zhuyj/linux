@@ -372,6 +372,8 @@ void rdma_umap_priv_init(struct rdma_umap_priv *priv,
 			 struct rdma_user_mmap_entry *entry);
 
 void ib_cq_pool_cleanup(struct ib_device *dev);
+void rdma_dim_init(struct ib_cq *cq);
+void rdma_dim_destroy(struct ib_cq *cq);
 
 bool rdma_nl_get_privileged_qkey(void);
 #endif /* _CORE_PRIV_H */
