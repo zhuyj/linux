@@ -459,6 +459,16 @@ struct panthor_queue {
 		atomic64_t seqno;
 
 		/**
+		 * @last_fence: Fence of the last submitted job.
+		 *
+		 * We return this fence when we get an empty command stream.
+		 * This way, we are guaranteed that all earlier jobs have completed
+		 * when drm_sched_job::s_fence::finished without having to feed
+		 * the CS ring buffer with a dummy job that only signals the fence.
+		 */
+		struct dma_fence *last_fence;
+
+		/**
 		 * @in_flight_jobs: List containing all in-flight jobs.
 		 *
 		 * Used to keep track and signal panthor_job::done_fence when the
@@ -829,6 +839,9 @@ static void group_free_queue(struct panthor_group *group, struct panthor_queue *
 	panthor_kernel_bo_destroy(queue->ringbuf);
 	panthor_kernel_bo_destroy(queue->iface.mem);
 
+	/* Release the last_fence we were holding, if any. */
+	dma_fence_put(queue->fence_ctx.last_fence);
+
 	kfree(queue);
 }
 
@@ -1090,7 +1103,13 @@ cs_slot_sync_queue_state_locked(struct panthor_device *ptdev, u32 csg_id, u32 cs
 			list_move_tail(&group->wait_node,
 				       &group->ptdev->scheduler->groups.waiting);
 		}
-		group->blocked_queues |= BIT(cs_id);
+
+		/* The queue is only blocked if there's no deferred operation
+		 * pending, which can be checked through the scoreboard status.
+		 */
+		if (!cs_iface->output->status_scoreboards)
+			group->blocked_queues |= BIT(cs_id);
+
 		queue->syncwait.gpu_va = cs_iface->output->status_wait_sync_ptr;
 		queue->syncwait.ref = cs_iface->output->status_wait_sync_value;
 		status_wait_cond = cs_iface->output->status_wait & CS_STATUS_WAIT_SYNC_COND_MASK;
@@ -2033,6 +2052,7 @@ static void
 tick_ctx_cleanup(struct panthor_scheduler *sched,
 		 struct panthor_sched_tick_ctx *ctx)
 {
+	struct panthor_device *ptdev = sched->ptdev;
 	struct panthor_group *group, *tmp;
 	u32 i;
 
@@ -2041,7 +2061,7 @@ tick_ctx_cleanup(struct panthor_scheduler *sched,
 			/* If everything went fine, we should only have groups
 			 * to be terminated in the old_groups lists.
 			 */
-			drm_WARN_ON(&group->ptdev->base, !ctx->csg_upd_failed_mask &&
+			drm_WARN_ON(&ptdev->base, !ctx->csg_upd_failed_mask &&
 				    group_can_run(group));
 
 			if (!group_can_run(group)) {
@@ -2064,7 +2084,7 @@ tick_ctx_cleanup(struct panthor_scheduler *sched,
 		/* If everything went fine, the groups to schedule lists should
 		 * be empty.
 		 */
-		drm_WARN_ON(&group->ptdev->base,
+		drm_WARN_ON(&ptdev->base,
 			    !ctx->csg_upd_failed_mask && !list_empty(&ctx->groups[i]));
 
 		list_for_each_entry_safe(group, tmp, &ctx->groups[i], run_node) {
@@ -2525,7 +2545,7 @@ static void queue_start(struct panthor_queue *queue)
 	list_for_each_entry(job, &queue->scheduler.pending_list, base.list)
 		job->base.s_fence->parent = dma_fence_get(job->done_fence);
 
-	drm_sched_start(&queue->scheduler, true);
+	drm_sched_start(&queue->scheduler);
 }
 
 static void panthor_group_stop(struct panthor_group *group)
@@ -2784,9 +2804,6 @@ static void group_sync_upd_work(struct work_struct *work)
 
 		spin_lock(&queue->fence_ctx.lock);
 		list_for_each_entry_safe(job, job_tmp, &queue->fence_ctx.in_flight_jobs, node) {
-			if (!job->call_info.size)
-				continue;
-
 			if (syncobj->seqno < job->done_fence->seqno)
 				break;
 
@@ -2865,11 +2882,14 @@ queue_run_job(struct drm_sched_job *sched_job)
 	static_assert(sizeof(call_instrs) % 64 == 0,
 		      "call_instrs is not aligned on a cacheline");
 
-	/* Stream size is zero, nothing to do => return a NULL fence and let
-	 * drm_sched signal the parent.
+	/* Stream size is zero, nothing to do except making sure all previously
+	 * submitted jobs are done before we signal the
+	 * drm_sched_job::s_fence::finished fence.
 	 */
-	if (!job->call_info.size)
-		return NULL;
+	if (!job->call_info.size) {
+		job->done_fence = dma_fence_get(queue->fence_ctx.last_fence);
+		return dma_fence_get(job->done_fence);
+	}
 
 	ret = pm_runtime_resume_and_get(ptdev->base.dev);
 	if (drm_WARN_ON(&ptdev->base, ret))
@@ -2926,7 +2946,12 @@ queue_run_job(struct drm_sched_job *sched_job)
 			pm_runtime_get(ptdev->base.dev);
 			sched->pm.has_ref = true;
 		}
+		panthor_devfreq_record_busy(sched->ptdev);
 	}
+
+	/* Update the last fence. */
+	dma_fence_put(queue->fence_ctx.last_fence);
+	queue->fence_ctx.last_fence = dma_fence_get(job->done_fence);
 
 	done_fence = dma_fence_get(job->done_fence);
 
@@ -3074,7 +3099,7 @@ int panthor_group_create(struct panthor_file *pfile,
 	if (group_args->pad)
 		return -EINVAL;
 
-	if (group_args->priority > PANTHOR_CSG_PRIORITY_HIGH)
+	if (group_args->priority >= PANTHOR_CSG_PRIORITY_COUNT)
 		return -EINVAL;
 
 	if ((group_args->compute_core_mask & ~ptdev->gpu_info.shader_present) ||
@@ -3224,6 +3249,18 @@ int panthor_group_destroy(struct panthor_file *pfile, u32 group_handle)
 	return 0;
 }
 
+static struct panthor_group *group_from_handle(struct panthor_group_pool *pool,
+					       u32 group_handle)
+{
+	struct panthor_group *group;
+
+	xa_lock(&pool->xa);
+	group = group_get(xa_load(&pool->xa, group_handle));
+	xa_unlock(&pool->xa);
+
+	return group;
+}
+
 int panthor_group_get_state(struct panthor_file *pfile,
 			    struct drm_panthor_group_get_state *get_state)
 {
@@ -3235,7 +3272,7 @@ int panthor_group_get_state(struct panthor_file *pfile,
 	if (get_state->pad)
 		return -EINVAL;
 
-	group = group_get(xa_load(&gpool->xa, get_state->group_handle));
+	group = group_from_handle(gpool, get_state->group_handle);
 	if (!group)
 		return -EINVAL;
 
@@ -3366,7 +3403,7 @@ panthor_job_create(struct panthor_file *pfile,
 	job->call_info.latest_flush = qsubmit->latest_flush;
 	INIT_LIST_HEAD(&job->node);
 
-	job->group = group_get(xa_load(&gpool->xa, group_handle));
+	job->group = group_from_handle(gpool, group_handle);
 	if (!job->group) {
 		ret = -EINVAL;
 		goto err_put_job;
@@ -3378,10 +3415,15 @@ panthor_job_create(struct panthor_file *pfile,
 		goto err_put_job;
 	}
 
-	job->done_fence = kzalloc(sizeof(*job->done_fence), GFP_KERNEL);
-	if (!job->done_fence) {
-		ret = -ENOMEM;
-		goto err_put_job;
+	/* Empty command streams don't need a fence, they'll pick the one from
+	 * the previously submitted job.
+	 */
+	if (job->call_info.size) {
+		job->done_fence = kzalloc(sizeof(*job->done_fence), GFP_KERNEL);
+		if (!job->done_fence) {
+			ret = -ENOMEM;
+			goto err_put_job;
+		}
 	}
 
 	ret = drm_sched_job_init(&job->base,
@@ -3401,13 +3443,8 @@ void panthor_job_update_resvs(struct drm_exec *exec, struct drm_sched_job *sched
 {
 	struct panthor_job *job = container_of(sched_job, struct panthor_job, base);
 
-	/* Still not sure why we want USAGE_WRITE for external objects, since I
-	 * was assuming this would be handled through explicit syncs being imported
-	 * to external BOs with DMA_BUF_IOCTL_IMPORT_SYNC_FILE, but other drivers
-	 * seem to pass DMA_RESV_USAGE_WRITE, so there must be a good reason.
-	 */
 	panthor_vm_update_resvs(job->group->vm, exec, &sched_job->s_fence->finished,
-				DMA_RESV_USAGE_BOOKKEEP, DMA_RESV_USAGE_WRITE);
+				DMA_RESV_USAGE_BOOKKEEP, DMA_RESV_USAGE_BOOKKEEP);
 }
 
 void panthor_sched_unplug(struct panthor_device *ptdev)
