@@ -473,6 +473,7 @@ bool test__start_subtest(const char *subtest_name)
 	state->subtest_states =
 		realloc(state->subtest_states,
 			state->subtest_num * sub_state_size);
+	fprintf(stdout, "file: %s +%d\n", __FILE__, __LINE__);
 	if (!state->subtest_states) {
 		fprintf(stderr, "Not enough memory to allocate subtest result\n");
 		return false;

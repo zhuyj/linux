@@ -26,6 +26,7 @@ struct smc_bpf_ops {
 SEC("struct_ops/bpf_smc_set_tcp_option_cond")
 void BPF_PROG(bpf_smc_set_tcp_option_cond, struct smc_bpf_ops_ctx *arg)
 {
+	bpf_printk("track1, file: %s +%d\n", __FILE__, __LINE__);
 	arg->set_option_cond.smc_ok = 1;
 }
 
@@ -34,6 +35,7 @@ void BPF_PROG(bpf_smc_set_tcp_option, struct smc_bpf_ops_ctx *arg)
 {
 	struct tcp_sock *tp = arg->set_option.tp;
 
+	bpf_printk("track1, file: %s +%d\n", __FILE__, __LINE__);
 	tp->syn_smc = 1;
 }
 
