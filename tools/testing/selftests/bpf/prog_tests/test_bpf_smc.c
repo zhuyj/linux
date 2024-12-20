@@ -522,6 +522,8 @@ fail:
 
 void test_bpf_smc(void)
 {
+	test__force_log();
+	fprintf(stdout, "test, file: %s +%d func: %s, caller: %ps\n", __FILE__, __LINE__, __func__, __builtin_return_address(0));
 	if (!setup_smc()) {
 		printf("setup for smc test failed, test SKIP:\n");
 		test__skip();
