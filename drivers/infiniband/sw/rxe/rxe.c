@@ -8,6 +8,7 @@
 #include <net/addrconf.h>
 #include "rxe.h"
 #include "rxe_loc.h"
+#include "rxe_ebpf.h"
 
 MODULE_AUTHOR("Bob Pearson, Frank Zago, John Groves, Kamal Heib");
 MODULE_DESCRIPTION("Soft RDMA transport");
@@ -260,6 +261,13 @@ static int __init rxe_module_init(void)
 	}
 
 	rdma_link_register(&rxe_link_ops);
+
+	err = rxe_register_ebpf();
+	if (err) {
+		pr_err("failed to register ebpf");
+		return err;
+	}
+
 	pr_info("loaded\n");
 	return 0;
 }
