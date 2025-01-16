@@ -14,6 +14,8 @@ typedef int pid_t;
 /* Declare the external kfunc */
 //extern int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32 substr__sz) __ksym;
 
+extern int bpf_set_cqe(int cqe) __ksym;
+
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 SEC("kprobe/do_unlinkat")
@@ -38,6 +40,7 @@ int BPF_KPROBE(rxe_create_qp, struct ib_qp *ibqp, struct ib_qp_init_attr *init) 
 	const int send_cqe = BPF_CORE_READ(init, send_cq, cqe);
 	const int recv_cqe = BPF_CORE_READ(init, recv_cq, cqe);
 
+	bpf_set_cqe(send_cqe * 2);
         bpf_printk("%s +%d func: %s, src_qpn: %d, send_cqe: %d, recv_cqe: %d\n",
 			__FILE__, __LINE__, __func__,
 			src_qpn, send_cqe, recv_cqe);

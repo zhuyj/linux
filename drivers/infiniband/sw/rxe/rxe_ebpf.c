@@ -31,10 +31,17 @@ __bpf_kfunc int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32
 	return -1;
 }
 
+__bpf_kfunc int bpf_set_cqe(int cqe) {
+	pr_info("%s +%d func: %s, cqe: %d\n", __FILE__, __LINE__, __func__, cqe);
+
+	return 0;
+}
+
 __bpf_kfunc_end_defs();
 
 BTF_KFUNCS_START(bpf_kfunc_rxe_ids_set)
 BTF_ID_FLAGS(func, bpf_strstr)
+BTF_ID_FLAGS(func, bpf_set_cqe)
 BTF_KFUNCS_END(bpf_kfunc_rxe_ids_set)
 
 static const struct btf_kfunc_id_set bpf_kfunc_rxe_set = {
@@ -45,12 +52,11 @@ static const struct btf_kfunc_id_set bpf_kfunc_rxe_set = {
 int rxe_register_ebpf(void) {
 	int ret;
 
-	pr_info("Hello, world!\n");
 	ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_KPROBE, &bpf_kfunc_rxe_set);
 	if (ret) {
 		pr_err("fail to register BTF kfunc ID set\n");
 		return ret;
 	}
-	pr_info("succeed registering\n");
-	return 0; // success 0
+	pr_info("eBPF succeed registering\n");
+	return 0; /* success 0 */
 }
