@@ -9,21 +9,13 @@
 /* Include the generated skeleton header */
 #include "bpf_rxe.skel.h"
 
-static volatile bool exiting = false;
-
-/* Signal handler for graceful termination */
-void handle_signal(int sig) {
-	exiting = true;
-}
-
 void test_bpf_rxe(void) {
 	struct bpf_rxe *skel;
 	int err;
 
 	test__force_log();
-	/* Handle SIGINT and SIGTERM for graceful shutdown */
-	signal(SIGINT, handle_signal);
 
+	system("modprobe -v rdma_rxe");
 	/* Open the BPF application */
 	skel = bpf_rxe__open();
 	if (!skel) {
@@ -45,7 +37,18 @@ void test_bpf_rxe(void) {
 		goto cleanup;
 	}
 
-	printf("BPF program loaded and attached successfully. Press Ctrl-C to exit.\n");
+	printf("BPF program loaded and attached successfully.\n");
+
+	system("ip tuntap add mode tun tun0");
+	system("ip addr add 1.1.1.1/24 dev tun0");
+	system("ip link set tun0 up");
+	system("rdma link add rxe0 type rxe netdev tun0");
+	system("rping -s -a 1.1.1.1&");
+	system("rping -c -a 1.1.1.1 -d -v -C 3");
+	system("rdma link del rxe0");
+	system("ip addr del 1.1.1.1/24 dev tun0");
+	system("ip tuntap del mode tun tun0");
+	system("modprobe -v -r tun");
 
 	/* Optionally, read the trace_pipe to see bpf_printk outputs */
 	FILE *trace_pipe = fopen("/sys/kernel/debug/tracing/trace_pipe", "r");
@@ -55,20 +58,9 @@ void test_bpf_rxe(void) {
 	}
 
 	/* Main loop */
-	while (!exiting) {
-		if (trace_pipe) {
-			char buffer[256];
-			if (fgets(buffer, sizeof(buffer), trace_pipe)) {
-				printf("%s", buffer);
-			} else {
-				if (errno == EINTR)
-					break;
-			}
-		} else {
-			/* If trace_pipe is not available, just sleep*/
-			sleep(1);
-		}
-	}
+	char buffer[256];
+	if (fgets(buffer, sizeof(buffer), trace_pipe))
+		printf("%s", buffer);
 
 	if (trace_pipe)
 		fclose(trace_pipe);

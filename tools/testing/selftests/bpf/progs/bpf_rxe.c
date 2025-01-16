@@ -18,22 +18,6 @@ extern int bpf_set_cqe(int cqe) __ksym;
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-SEC("kprobe/do_unlinkat")
-int BPF_KPROBE(do_unlinkat) {
-	pid_t pid = bpf_get_current_pid_tgid() >> 32;
-	char str[] = "Hello, world!";
-	char substr[] = "wor";
-	int result;
-
-	result = bpf_strstr(str, sizeof(str) - 1, substr, sizeof(substr) - 1);
-	if (result != -1) {
-		bpf_printk("'%s' found in '%s' at index %d\n", substr, str, result);
-	}
-
-	bpf_printk("Hello, world! (pid: %d) bpf_strstr %d\n", pid, result);
-	return 0;
-}
-
 SEC("kprobe/rxe_create_qp")
 int BPF_KPROBE(rxe_create_qp, struct ib_qp *ibqp, struct ib_qp_init_attr *init) {
 	const u32 src_qpn = BPF_CORE_READ(init, source_qpn);
