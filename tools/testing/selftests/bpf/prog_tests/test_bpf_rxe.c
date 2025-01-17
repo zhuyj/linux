@@ -16,6 +16,10 @@ void test_bpf_rxe(void) {
 	test__force_log();
 
 	system("modprobe -v rdma_rxe");
+
+	/* Clear the logs in trace */
+	system("echo > /sys/kernel/debug/tracing/trace");
+
 	/* Open the BPF application */
 	skel = bpf_rxe__open();
 	if (!skel) {
@@ -50,21 +54,8 @@ void test_bpf_rxe(void) {
 	system("ip tuntap del mode tun tun0");
 	system("modprobe -v -r tun");
 
-	/* Optionally, read the trace_pipe to see bpf_printk outputs */
-	FILE *trace_pipe = fopen("/sys/kernel/debug/tracing/trace_pipe", "r");
-	if (!trace_pipe) {
-		perror("fopen trace_pipe");
-		/* Continue without reading trace_pipe */
-	}
-
-	/* Main loop */
-	char buffer[256];
-	if (fgets(buffer, sizeof(buffer), trace_pipe))
-		printf("%s", buffer);
-
-	if (trace_pipe)
-		fclose(trace_pipe);
-
+	/* output the bpf_rxe logs */
+	system("cat /sys/kernel/debug/tracing/trace");
 cleanup:
 	/* Clean up and destroy the BPF program */
 	bpf_rxe__destroy(skel);
