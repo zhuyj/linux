@@ -70,6 +70,22 @@ static const __maybe_unused struct {
 	[RNBD_ACCESS_MIGRATION] = {RNBD_ACCESS_MIGRATION, "migration"},
 };
 
+enum rnbd_io_mode {
+	RNBD_FILEIO,
+	RNBD_BLOCKIO,
+	RNBD_AUTOIO,
+};
+
+static const __maybe_unused struct {
+	enum rnbd_io_mode mode;
+	const char *str;
+} rnbd_io_modes[] = {
+	[RNBD_FILEIO] = {RNBD_FILEIO, "fileio"},
+	[RNBD_BLOCKIO] = {RNBD_BLOCKIO, "blockio"},
+	[RNBD_AUTOIO] = {RNBD_AUTOIO, "autoio"},
+};
+
+
 /**
  * struct rnbd_msg_sess_info - initial session info from client to server
  * @hdr:		message header
@@ -102,7 +118,7 @@ struct rnbd_msg_sess_info_rsp {
 struct rnbd_msg_open {
 	struct rnbd_msg_hdr hdr;
 	u8		access_mode;
-	u8		resv1;
+	u8		io_mode;
 	s8		dev_name[NAME_MAX];
 	u8		reserved[3];
 };

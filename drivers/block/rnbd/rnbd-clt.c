@@ -556,6 +556,7 @@ static int send_msg_open(struct rnbd_clt_dev *dev, enum wait_type wait)
 
 	msg.hdr.type	= cpu_to_le16(RNBD_MSG_OPEN);
 	msg.access_mode	= dev->access_mode;
+	msg.io_mode	= dev->io_mode;
 	strscpy(msg.dev_name, dev->pathname, sizeof(msg.dev_name));
 
 	WARN_ON(!rnbd_clt_get_dev(dev));
@@ -1401,6 +1402,7 @@ static int rnbd_client_setup_device(struct rnbd_clt_dev *dev,
 
 static struct rnbd_clt_dev *init_dev(struct rnbd_clt_session *sess,
 				      enum rnbd_access_mode access_mode,
+				      enum rnbd_io_mode io_mode,
 				      const char *pathname,
 				      u32 nr_poll_queues)
 {
@@ -1440,6 +1442,7 @@ static struct rnbd_clt_dev *init_dev(struct rnbd_clt_session *sess,
 	dev->clt_device_id	= ret;
 	dev->sess		= sess;
 	dev->access_mode	= access_mode;
+	dev->io_mode		= io_mode;
 	dev->nr_poll_queues	= nr_poll_queues;
 	mutex_init(&dev->lock);
 	refcount_set(&dev->refcount, 1);
@@ -1528,6 +1531,7 @@ struct rnbd_clt_dev *rnbd_clt_map_device(const char *sessname,
 					   size_t path_cnt, u16 port_nr,
 					   const char *pathname,
 					   enum rnbd_access_mode access_mode,
+					   enum rnbd_io_mode io_mode,
 					   u32 nr_poll_queues)
 {
 	struct rnbd_clt_session *sess;
@@ -1548,7 +1552,7 @@ struct rnbd_clt_dev *rnbd_clt_map_device(const char *sessname,
 	if (IS_ERR(sess))
 		return ERR_CAST(sess);
 
-	dev = init_dev(sess, access_mode, pathname, nr_poll_queues);
+	dev = init_dev(sess, access_mode, io_mode, pathname, nr_poll_queues);
 	if (IS_ERR(dev)) {
 		pr_err("map_device: failed to map device '%s' from session %s, can't initialize device, err: %pe\n",
 		       pathname, sess->sessname, dev);
