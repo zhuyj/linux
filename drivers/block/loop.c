@@ -582,45 +582,70 @@ static int loop_validate_file(struct file *file, struct block_device *bdev)
  * new backing store is the same size and type as the old backing store.
  */
 static int loop_change_fd(struct loop_device *lo, struct block_device *bdev,
-			  unsigned int arg)
+			  unsigned int arg, bool b_file)
 {
-	struct file *file = fget(arg);
+	struct file *file = NULL;
 	struct file *old_file;
 	unsigned int memflags;
 	int error;
 	bool partscan;
 	bool is_loop;
 
+	if (b_file) {
+		// Open the file
+		file = filp_open("/root/loop/mnt2/file1", O_RDWR, 0);
+		if (IS_ERR(file)) {
+			pr_err("Failed to open file\n");
+			return -EBADF;
+		}
+	} else {
+		file = fget(arg);
+	}
+
 	if (!file)
 		return -EBADF;
 
+	pr_warn("%s +%d func: %s caller: %ps\n", __FILE__, __LINE__, __func__, __builtin_return_address(0));
 	/* suppress uevents while reconfiguring the device */
 	dev_set_uevent_suppress(disk_to_dev(lo->lo_disk), 1);
 
 	is_loop = is_loop_device(file);
 	error = loop_global_lock_killable(lo, is_loop);
-	if (error)
+	if (error) {
+		pr_warn("%s +%d func: %s caller: %ps, error: %pe\n", __FILE__, __LINE__, __func__, __builtin_return_address(0), ERR_PTR(error));
 		goto out_putf;
+	}
+
 	error = -ENXIO;
-	if (lo->lo_state != Lo_bound)
+	if (lo->lo_state != Lo_bound) {
+		pr_warn("%s +%d func: %s caller: %ps, error: %pe\n", __FILE__, __LINE__, __func__, __builtin_return_address(0), ERR_PTR(error));
 		goto out_err;
+	}
 
 	/* the loop device has to be read-only */
 	error = -EINVAL;
-	if (!(lo->lo_flags & LO_FLAGS_READ_ONLY))
+#if 0
+	if (!(lo->lo_flags & LO_FLAGS_READ_ONLY)) {
+		pr_warn("%s +%d func: %s caller: %ps, error: %pe\n", __FILE__, __LINE__, __func__, __builtin_return_address(0), ERR_PTR(error));
 		goto out_err;
+	}
+#endif
 
 	error = loop_validate_file(file, bdev);
-	if (error)
+	if (error) {
+		pr_warn("%s +%d func: %s caller: %ps, error: %pe\n", __FILE__, __LINE__, __func__, __builtin_return_address(0), ERR_PTR(error));
 		goto out_err;
+	}
 
 	old_file = lo->lo_backing_file;
 
 	error = -EINVAL;
 
 	/* size of the new backing store needs to be the same */
-	if (get_loop_size(lo, file) != get_loop_size(lo, old_file))
+	if (get_loop_size(lo, file) != get_loop_size(lo, old_file)) {
+		pr_warn("%s +%d func: %s caller: %ps, error: %pe\n", __FILE__, __LINE__, __func__, __builtin_return_address(0), ERR_PTR(error));
 		goto out_err;
+	}
 
 	/* and ... switch */
 	disk_force_media_change(lo->lo_disk);
@@ -1522,6 +1547,36 @@ static int lo_simple_ioctl(struct loop_device *lo, unsigned int cmd,
 	return err;
 }
 
+#if 0
+static void read_kernel_file(void) {
+	struct file *file;
+	char buf[128];
+	loff_t pos = 0;
+	ssize_t bytes_read;
+
+	// Open the file
+	file = filp_open("/path/to/file", O_RDWR, 0);
+	if (IS_ERR(file)) {
+		pr_err("Failed to open file\n");
+		return;
+	}
+
+	// Read the file using kernel_read()
+	bytes_read = kernel_read(file, buf, sizeof(buf), &pos);
+	if (bytes_read < 0) {
+		pr_err("Error reading file\n");
+		filp_close(file, NULL);
+		return;
+	}
+
+	// Output the contents (just printing the number of bytes)
+	pr_info("Read %zd bytes from file\n", bytes_read);
+
+	// Close the file
+	filp_close(file, NULL);
+}
+#endif
+
 static int lo_ioctl(struct block_device *bdev, blk_mode_t mode,
 	unsigned int cmd, unsigned long arg)
 {
@@ -1548,11 +1603,22 @@ static int lo_ioctl(struct block_device *bdev, blk_mode_t mode,
 
 		if (copy_from_user(&config, argp, sizeof(config)))
 			return -EFAULT;
+#if 0
+	{
+		int ret;
 
+		ret = loop_configure(lo, mode, bdev, &config);
+		if (ret)
+			return ret;
+
+		return loop_change_fd(lo, bdev, 0, true);
+	}
+#else
 		return loop_configure(lo, mode, bdev, &config);
+#endif
 	}
 	case LOOP_CHANGE_FD:
-		return loop_change_fd(lo, bdev, arg);
+		return loop_change_fd(lo, bdev, arg, false);
 	case LOOP_CLR_FD:
 		return loop_clr_fd(lo);
 	case LOOP_SET_STATUS:
@@ -2153,7 +2219,7 @@ static int loop_control_remove(int idx)
 		pr_warn_once("deleting an unspecified loop device is not supported.\n");
 		return -EINVAL;
 	}
-		
+
 	/* Hide this loop device for serialization. */
 	ret = mutex_lock_killable(&loop_ctl_mutex);
 	if (ret)
@@ -2276,7 +2342,6 @@ static int __init loop_init(void)
 	err = misc_register(&loop_misc);
 	if (err < 0)
 		goto err_out;
-
 
 	if (__register_blkdev(LOOP_MAJOR, "loop", loop_probe)) {
 		err = -EIO;
