@@ -171,7 +171,8 @@ struct rnbd_msg_open_rsp {
 	__le16			secure_discard;
 	u8			obsolete_rotational;
 	u8			cache_policy;
-	u8			reserved[10];
+	u8			io_mode;
+	u8			reserved[9];
 };
 
 /**
