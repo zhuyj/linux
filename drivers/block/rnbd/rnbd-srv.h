@@ -40,6 +40,8 @@ struct rnbd_srv_dev {
 	struct list_head		sess_dev_list;
 	struct mutex			lock;
 	int				open_write_cnt;
+	enum rnbd_io_mode		mode;
+	struct file			*file;
 };
 
 /* Structure which binds N devices and N sessions */
@@ -56,7 +58,21 @@ struct rnbd_srv_sess_dev {
 	struct kref			kref;
 	struct completion               *destroy_comp;
 	char				pathname[NAME_MAX];
+	enum rnbd_io_mode		mode;
 	enum rnbd_access_mode		access_mode;
+};
+
+struct rnbd_dev_file_io_work {
+	struct rnbd_srv_dev	*dev;
+	void			*priv;
+
+	sector_t		sector;
+	void			*data;
+	size_t			len;
+	size_t			bi_size;
+	enum rnbd_io_flags	flags;
+
+	struct work_struct	work;
 };
 
 void rnbd_srv_sess_dev_force_close(struct rnbd_srv_sess_dev *sess_dev,
