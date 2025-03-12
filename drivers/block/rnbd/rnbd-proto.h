@@ -218,9 +218,13 @@ enum rnbd_io_flags {
 	RNBD_OP_SECURE_ERASE	= 4,
 	RNBD_OP_WRITE_ZEROES	= 5,
 
+	RNBD_OP_LAST,
+
 	/* Flags */
 	RNBD_F_SYNC  = 1<<(RNBD_OP_BITS + 0),
 	RNBD_F_FUA   = 1<<(RNBD_OP_BITS + 1),
+
+	RNBD_F_ALL   = (RNBD_F_SYNC | RNBD_F_FUA)
 };
 
 static inline u32 rnbd_op(u32 flags)
@@ -311,5 +315,20 @@ static inline u32 rq_to_rnbd_flags(struct request *rq)
 }
 
 const char *rnbd_access_mode_str(enum rnbd_access_mode mode);
+
+static inline bool rnbd_flags_supported(u32 flags)
+{
+	u32 op;
+
+	op = rnbd_op(flags);
+	flags = rnbd_flags(flags);
+
+	if (op >= RNBD_OP_LAST)
+		return false;
+	if (flags & ~RNBD_F_ALL)
+		return false;
+
+	return true;
+}
 
 #endif /* RNBD_PROTO_H */
