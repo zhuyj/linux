@@ -217,7 +217,7 @@ static void rnbd_dev_file_submit_io_worker(struct work_struct *w)
 	loff_t off;
 
 	dev_work = container_of(w, struct rnbd_dev_file_io_work, work);
-	off = dev_work->sector * bdev_logical_block_size(dev_work->dev->bdev);
+	off = dev_work->sector * bdev_logical_block_size(dev_work->dev->bdev); //struct rnbd_srv_dev is introduced
 	f = dev_work->dev->file;
 	len = dev_work->bi_size;
 
@@ -227,12 +227,14 @@ static void rnbd_dev_file_submit_io_worker(struct work_struct *w)
 			goto out;
 	}
 
+#if 0
+	/* scsi: rnbd: Remove WRITE_SAME support, replace with REQ_OP_WRITE_ZEROES, will implement later */
 	if (rnbd_op(dev_work->flags) == RNBD_OP_WRITE_SAME) {
 		ret = rnbd_dev_file_handle_write_same(dev_work);
 		if (unlikely(ret))
 			goto out;
 	}
-
+#endif
 	/* TODO Implement support for DIRECT */
 	if (dev_work->bi_size) {
 		loff_t off_tmp = off;
@@ -258,13 +260,13 @@ static void rnbd_dev_file_submit_io_worker(struct work_struct *w)
 	if (dev_work->flags & RNBD_F_FUA)
 		ret = rnbd_dev_file_handle_fua(dev_work, off);
 out:
-	dev_work->dev->io_cb(dev_work->priv, ret);
+//	dev_work->dev->io_cb(dev_work->priv, ret); /* rnbd_endio is merged into blockio, handle it later */
 	kfree(dev_work);
 }
 
 static int rnbd_dev_file_submit_io(struct rnbd_dev *dev, sector_t sector,
 				    void *data, size_t len, size_t bi_size,
-				    enum ibnbd_io_flags flags, void *priv)
+				    enum rnbd_io_flags flags, void *priv)
 {
 	struct rnbd_dev_file_io_work *w;
 
@@ -311,7 +313,7 @@ static int process_rdma(struct rnbd_srv_session *srv_sess,
 	trace_process_rdma(srv_sess, msg, id, datalen, usrlen);
 
 	if (dev->io_mode == RNBD_FILEIO)
-		return ibnbd_dev_file_submit_io(dev, sector, data, len, bi_size,
+		return rnbd_dev_file_submit_io(dev, sector, data, len, bi_size,
 						flags, priv);
 
 	priv = kmalloc(sizeof(*priv), GFP_KERNEL);

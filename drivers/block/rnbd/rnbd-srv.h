@@ -42,6 +42,17 @@ struct rnbd_srv_dev {
 	int				open_write_cnt;
 	enum rnbd_io_mode		mode;
 	struct file			*file;
+	struct block_device		*bdev;
+};
+
+struct rnbd_dev {
+	struct block_device	*bdev;
+	struct bio_set		*ibd_bio_set;
+	struct file		*file;
+	fmode_t			blk_open_flags;
+	enum rnbd_io_mode	mode;
+	char			name[BDEVNAME_SIZE];
+//	rnbd_dev_io_fn		*io_cb;  /* Handle this later */
 };
 
 /* Structure which binds N devices and N sessions */
