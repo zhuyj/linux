@@ -331,4 +331,18 @@ static inline bool rnbd_flags_supported(u32 flags)
 	return true;
 }
 
+static inline const char *rnbd_io_mode_str(enum rnbd_io_mode mode)
+{
+	switch (mode) {
+	case RNBD_FILEIO:
+		return "fileio";
+	case RNBD_BLOCKIO:
+		return "blockio";
+	case RNBD_AUTOIO:
+		return "autoio";
+	default:
+		return "unknown";
+	}
+}
+
 #endif /* RNBD_PROTO_H */

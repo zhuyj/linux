@@ -312,10 +312,6 @@ static int process_rdma(struct rnbd_srv_session *srv_sess,
 
 	trace_process_rdma(srv_sess, msg, id, datalen, usrlen);
 
-	if (dev->io_mode == RNBD_FILEIO)
-		return rnbd_dev_file_submit_io(dev, sector, data, len, bi_size,
-						flags, priv);
-
 	priv = kmalloc(sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
@@ -329,6 +325,10 @@ static int process_rdma(struct rnbd_srv_session *srv_sess,
 		err = -ENOTCONN;
 		goto err;
 	}
+
+	if (sess_dev->dev->mode == RNBD_FILEIO)
+		return rnbd_dev_file_submit_io(sess_dev->rnbd_dev, le64_to_cpu(msg->sector), data, datalen, le32_to_cpu(msg->bi_size),
+						le32_to_cpu(msg->rw), priv);
 
 	priv->sess_dev = sess_dev;
 	priv->id = id;
@@ -375,7 +375,7 @@ static void destroy_device(struct kref *kref)
 
 	WARN_ONCE(!list_empty(&dev->sess_dev_list),
 		  "Device %s is being destroyed but still in use!\n",
-		  dev->name);
+		  dev->id);
 
 	spin_lock(&dev_lock);
 	list_del(&dev->list);
@@ -401,8 +401,8 @@ void rnbd_destroy_sess_dev(struct rnbd_srv_sess_dev *sess_dev, bool keep_id)
 	DECLARE_COMPLETION_ONSTACK(dc);
 
 	flush_workqueue(fileio_wq);
-	if (dev->mode == RNBD_FILEIO) {
-		filp_close(sess_dev->file, sess_dev->file);
+	if (sess_dev->dev->mode == RNBD_FILEIO) {
+		filp_close(sess_dev->dev->file, sess_dev->dev->file);
 	}
 
 	if (keep_id)
@@ -633,7 +633,7 @@ static struct rnbd_srv_dev *rnbd_srv_init_srv_dev(struct block_device *bdev,
 	if (!dev)
 		return ERR_PTR(-ENOMEM);
 
-	snprintf(dev->name, sizeof(dev->name), "%pg", bdev);
+	snprintf(dev->id, sizeof(dev->id), "%pg", bdev);
 	dev->mode = mode;
 	kref_init(&dev->kref);
 	INIT_LIST_HEAD(&dev->sess_dev_list);
@@ -649,7 +649,7 @@ rnbd_srv_find_or_add_srv_dev(struct rnbd_srv_dev *new_dev)
 
 	spin_lock(&dev_lock);
 	list_for_each_entry(dev, &dev_list, list) {
-		if (!strncmp(dev->name, new_dev->name, sizeof(dev->name))) {
+		if (!strncmp(dev->id, new_dev->id, sizeof(dev->id))) {
 			if (!kref_get_unless_zero(&dev->kref))
 				/*
 				 * We lost the race, device is almost dead.
@@ -691,7 +691,7 @@ static int rnbd_srv_check_update_open_perm(struct rnbd_srv_dev *srv_dev,
 			srv_dev->open_write_cnt++;
 		} else {
 			pr_err("Mapping device '%s' for session %s with RW permissions failed. Device already opened as 'RW' by %d client(s) in %s mode, access mode %s.\n",
-			       srv_dev->name, srv_sess->sessname,
+			       srv_dev->id, srv_sess->sessname,
 			       srv_dev->open_write_cnt,
 			       rnbd_io_mode_str(srv_dev->mode),
 			       rnbd_access_modes[access_mode].str);
@@ -703,7 +703,7 @@ static int rnbd_srv_check_update_open_perm(struct rnbd_srv_dev *srv_dev,
 			srv_dev->open_write_cnt++;
 		} else {
 			pr_err("Mapping device '%s' for session %s with migration permissions failed. Device already opened as 'RW' by %d client(s) in %s mode, access mode %s.\n",
-			       srv_dev->name, srv_sess->sessname,
+			       srv_dev->id, srv_sess->sessname,
 			       srv_dev->open_write_cnt,
 			       rnbd_io_mode_str(srv_dev->mode),
 			       rnbd_access_modes[access_mode].str);
@@ -712,7 +712,7 @@ static int rnbd_srv_check_update_open_perm(struct rnbd_srv_dev *srv_dev,
 		break;
 	default:
 		pr_err("Received mapping request for device '%s' on session %s with invalid access mode: %d\n",
-		       srv_dev->name, srv_sess->sessname, access_mode);
+		       srv_dev->id, srv_sess->sessname, access_mode);
 		ret = -EINVAL;
 	}
 
@@ -750,30 +750,37 @@ rnbd_srv_get_or_create_srv_dev(struct block_device *bdev,
 }
 
 static void rnbd_srv_fill_msg_open_rsp(struct rnbd_msg_open_rsp *rsp,
-					struct rnbd_srv_sess_dev *sess_dev)
+                    struct rnbd_srv_sess_dev *sess_dev)
 {
-	struct block_device *bdev = file_bdev(sess_dev->bdev_file);
+	struct rnbd_dev *rnbd_dev = sess_dev->rnbd_dev;
 
 	rsp->hdr.type = cpu_to_le16(RNBD_MSG_OPEN_RSP);
-	rsp->device_id = cpu_to_le32(sess_dev->device_id);
-	rsp->nsectors = cpu_to_le64(bdev_nr_sectors(bdev));
-	rsp->logical_block_size	= cpu_to_le16(bdev_logical_block_size(bdev));
-	rsp->physical_block_size = cpu_to_le16(bdev_physical_block_size(bdev));
-	rsp->max_segments = cpu_to_le16(bdev_max_segments(bdev));
+	rsp->device_id =
+	    cpu_to_le32(sess_dev->device_id);
+	rsp->nsectors =
+	    cpu_to_le64(get_capacity(rnbd_dev->bdev->bd_disk));
+	rsp->logical_block_size =
+	    cpu_to_le16(rnbd_dev_get_logical_bsize(rnbd_dev));
+	rsp->physical_block_size =
+	    cpu_to_le16(rnbd_dev_get_phys_bsize(rnbd_dev));
+	rsp->max_segments =
+	    cpu_to_le16(rnbd_dev_get_max_segs(rnbd_dev));
 	rsp->max_hw_sectors =
-		cpu_to_le32(queue_max_hw_sectors(bdev_get_queue(bdev)));
-	rsp->max_write_zeroes_sectors =
-		cpu_to_le32(bdev_write_zeroes_sectors(bdev));
-	rsp->max_discard_sectors = cpu_to_le32(bdev_max_discard_sectors(bdev));
-	rsp->discard_granularity = cpu_to_le32(bdev_discard_granularity(bdev));
-	rsp->discard_alignment = cpu_to_le32(bdev_discard_alignment(bdev));
-	rsp->secure_discard = cpu_to_le16(bdev_max_secure_erase_sectors(bdev));
-	rsp->cache_policy = 0;
-	if (bdev_write_cache(bdev))
-		rsp->cache_policy |= RNBD_WRITEBACK;
-	if (bdev_fua(bdev))
-		rsp->cache_policy |= RNBD_FUA;
-	rsp->io_mode = bdev->mode;
+	    cpu_to_le32(rnbd_dev_get_max_hw_sects(rnbd_dev));
+//	rsp->max_write_same_sectors =
+//	    cpu_to_le32(rnbd_dev_get_max_write_same_sects(rnbd_dev));
+	rsp->max_discard_sectors =
+	    cpu_to_le32(rnbd_dev_get_max_discard_sects(rnbd_dev));
+	rsp->discard_granularity =
+	    cpu_to_le32(rnbd_dev_get_discard_granularity(rnbd_dev));
+	rsp->discard_alignment =
+	    cpu_to_le32(rnbd_dev_get_discard_alignment(rnbd_dev));
+	rsp->secure_discard =
+	    cpu_to_le16(rnbd_dev_get_secure_discard(rnbd_dev));
+//	rsp->rotational =
+//	    !blk_queue_nonrot(bdev_get_queue(rnbd_dev->bdev));
+	rsp->io_mode =
+	    rnbd_dev->mode;
 }
 
 static struct rnbd_srv_sess_dev *

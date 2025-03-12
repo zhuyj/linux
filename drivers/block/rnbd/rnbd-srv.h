@@ -35,7 +35,7 @@ struct rnbd_srv_dev {
 	struct kobject                  dev_kobj;
 	struct kobject                  *dev_sessions_kobj;
 	struct kref                     kref;
-	char				name[NAME_MAX];
+	char				id[NAME_MAX];
 	/* List of rnbd_srv_sess_dev structs */
 	struct list_head		sess_dev_list;
 	struct mutex			lock;
@@ -59,6 +59,7 @@ struct rnbd_dev {
 struct rnbd_srv_sess_dev {
 	/* Entry inside rnbd_srv_dev struct */
 	struct list_head		dev_list;
+	struct rnbd_dev			*rnbd_dev;
 	struct file			*bdev_file;
 	struct rnbd_srv_session		*sess;
 	struct rnbd_srv_dev		*dev;
@@ -74,7 +75,7 @@ struct rnbd_srv_sess_dev {
 };
 
 struct rnbd_dev_file_io_work {
-	struct rnbd_srv_dev	*dev;
+	struct rnbd_dev		*dev;
 	void			*priv;
 
 	sector_t		sector;
@@ -98,5 +99,61 @@ void rnbd_srv_destroy_dev_session_sysfs(struct rnbd_srv_sess_dev *sess_dev);
 int rnbd_srv_create_sysfs_files(void);
 void rnbd_srv_destroy_sysfs_files(void);
 void rnbd_destroy_sess_dev(struct rnbd_srv_sess_dev *sess_dev, bool keep_id);
+
+static inline int rnbd_dev_get_logical_bsize(const struct rnbd_dev *dev)
+{
+	return bdev_logical_block_size(dev->bdev);
+}
+
+static inline int rnbd_dev_get_phys_bsize(const struct rnbd_dev *dev)
+{
+	return bdev_physical_block_size(dev->bdev);
+}
+
+static inline int rnbd_dev_get_max_segs(const struct rnbd_dev *dev)
+{
+	return queue_max_segments(bdev_get_queue(dev->bdev));
+}
+
+static inline int rnbd_dev_get_max_hw_sects(const struct rnbd_dev *dev)
+{
+	return queue_max_hw_sectors(bdev_get_queue(dev->bdev));
+}
+
+static inline int rnbd_dev_get_max_discard_sects(const struct rnbd_dev *dev)
+{
+#if 0
+	if (!blk_queue_discard(bdev_get_queue(dev->bdev)))
+		return 0;
+
+	if (dev->mode == RNBD_BLOCKIO)
+		return blk_queue_get_max_sectors(bdev_get_queue(dev->bdev),
+						 REQ_OP_DISCARD);
+#endif
+	return 0;
+}
+
+static inline int rnbd_dev_get_discard_granularity(const struct rnbd_dev *dev)
+{
+	if (dev->mode == RNBD_BLOCKIO)
+		return bdev_get_queue(dev->bdev)->limits.discard_granularity;
+	return 0;
+}
+
+static inline int rnbd_dev_get_discard_alignment(const struct rnbd_dev *dev)
+{
+	if (dev->mode == RNBD_BLOCKIO)
+		return bdev_get_queue(dev->bdev)->limits.discard_alignment;
+	return 0;
+}
+
+static inline int rnbd_dev_get_secure_discard(const struct rnbd_dev *dev)
+{
+#if 0
+	if (dev->mode == RNBD_BLOCKIO)
+		return blk_queue_secure_erase(bdev_get_queue(dev->bdev));
+#endif
+	return 0;
+}
 
 #endif /* RNBD_SRV_H */
