@@ -441,6 +441,7 @@ struct rxe_dev {
 	atomic64_t		stats_counters[RXE_NUM_OF_COUNTERS];
 
 	struct rxe_port		port;
+	struct socket		*l_sk6;
 };
 
 static inline struct net_device *rxe_ib_device_get_netdev(struct ib_device *dev)
