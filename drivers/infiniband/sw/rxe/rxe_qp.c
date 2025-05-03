@@ -862,10 +862,20 @@ static void rxe_qp_do_cleanup(struct work_struct *work)
 	}
 }
 
+#define	RXE_CLEANUP_SKB_IN_FLIGHT_TIMEOUT	200
+
 /* called when the last reference to the qp is dropped */
 void rxe_qp_cleanup(struct rxe_pool_elem *elem)
 {
 	struct rxe_qp *qp = container_of(elem, typeof(*qp), elem);
+	int cnt = RXE_CLEANUP_SKB_IN_FLIGHT_TIMEOUT;
+
+	/* Before qp is cleanup, check skb in flight */
+	while (cnt && atomic_read(&qp->skb_out) > 0) {
+		msleep(1);
+		cnt--;
+		cond_resched();
+	}
 
 	execute_in_process_context(rxe_qp_do_cleanup, &qp->cleanup_work);
 }
