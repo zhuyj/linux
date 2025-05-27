@@ -1097,7 +1097,7 @@ R:	Carlos Bilbao <carlos.bilbao@kernel.org>
 L:	platform-driver-x86@vger.kernel.org
 S:	Maintained
 F:	Documentation/arch/x86/amd_hsmp.rst
-F:	arch/x86/include/asm/amd_hsmp.h
+F:	arch/x86/include/asm/amd/hsmp.h
 F:	arch/x86/include/uapi/asm/amd_hsmp.h
 F:	drivers/platform/x86/amd/hsmp/
 
@@ -1142,7 +1142,7 @@ M:	Mario Limonciello <mario.limonciello@amd.com>
 M:	Yazen Ghannam <yazen.ghannam@amd.com>
 L:	linux-kernel@vger.kernel.org
 S:	Supported
-F:	arch/x86/include/asm/amd_node.h
+F:	arch/x86/include/asm/amd/node.h
 F:	arch/x86/kernel/amd_node.c
 
 AMD PDS CORE DRIVER
@@ -1682,7 +1682,7 @@ M:	Greg Kroah-Hartman <gregkh@linuxfoundation.org>
 M:	Arve Hjønnevåg <arve@android.com>
 M:	Todd Kjos <tkjos@android.com>
 M:	Martijn Coenen <maco@android.com>
-M:	Joel Fernandes <joel@joelfernandes.org>
+M:	Joel Fernandes <joelagnelf@nvidia.com>
 M:	Christian Brauner <christian@brauner.io>
 M:	Carlos Llamas <cmllamas@google.com>
 M:	Suren Baghdasaryan <surenb@google.com>
@@ -5983,7 +5983,9 @@ S:	Supported
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/a.hindborg/linux.git configfs-next
 F:	fs/configfs/
 F:	include/linux/configfs.h
+F:	rust/kernel/configfs.rs
 F:	samples/configfs/
+F:	samples/rust/rust_configfs.rs
 
 CONGATEC BOARD CONTROLLER MFD DRIVER
 M:	Thomas Richard <thomas.richard@bootlin.com>
@@ -6261,6 +6263,7 @@ F:	Documentation/staging/crc*
 F:	arch/*/lib/crc*
 F:	include/linux/crc*
 F:	lib/crc*
+F:	lib/tests/crc_kunit.c
 F:	scripts/gen-crc-consts.py
 
 CREATIVE SB0540
@@ -6296,6 +6299,7 @@ T:	git git://git.kernel.org/pub/scm/linux/kernel/git/herbert/crypto-2.6.git
 F:	Documentation/crypto/
 F:	Documentation/devicetree/bindings/crypto/
 F:	arch/*/crypto/
+F:	arch/*/lib/crypto/
 F:	crypto/
 F:	drivers/crypto/
 F:	include/crypto/
@@ -11106,6 +11110,14 @@ L:	linuxppc-dev@lists.ozlabs.org
 S:	Odd Fixes
 F:	drivers/tty/hvc/
 
+HUNG TASK DETECTOR
+M:	Andrew Morton <akpm@linux-foundation.org>
+R:	Lance Yang <lance.yang@linux.dev>
+L:	linux-kernel@vger.kernel.org
+S:	Maintained
+F:	include/linux/hung_task.h
+F:	kernel/hung_task.c
+
 I2C ACPI SUPPORT
 M:	Mika Westerberg <westeri@kernel.org>
 L:	linux-i2c@vger.kernel.org
@@ -13653,7 +13665,6 @@ M:	Madhavan Srinivasan <maddy@linux.ibm.com>
 M:	Michael Ellerman <mpe@ellerman.id.au>
 R:	Nicholas Piggin <npiggin@gmail.com>
 R:	Christophe Leroy <christophe.leroy@csgroup.eu>
-R:	Naveen N Rao <naveen@kernel.org>
 L:	linuxppc-dev@lists.ozlabs.org
 S:	Supported
 W:	https://github.com/linuxppc/wiki/wiki
@@ -13734,7 +13745,7 @@ M:	Luc Maranget <luc.maranget@inria.fr>
 M:	"Paul E. McKenney" <paulmck@kernel.org>
 R:	Akira Yokosawa <akiyks@gmail.com>
 R:	Daniel Lustig <dlustig@nvidia.com>
-R:	Joel Fernandes <joel@joelfernandes.org>
+R:	Joel Fernandes <joelagnelf@nvidia.com>
 L:	linux-kernel@vger.kernel.org
 L:	linux-arch@vger.kernel.org
 L:	lkmm@lists.linux.dev
@@ -14296,9 +14307,8 @@ F:	drivers/gpu/drm/armada/
 F:	include/uapi/drm/armada_drm.h
 
 MARVELL CRYPTO DRIVER
-M:	Boris Brezillon <bbrezillon@kernel.org>
-M:	Arnaud Ebalard <arno@natisbad.org>
 M:	Srujana Challa <schalla@marvell.com>
+M:	Bharat Bhushan <bbhushan2@marvell.com>
 L:	linux-crypto@vger.kernel.org
 S:	Maintained
 F:	drivers/crypto/marvell/
@@ -15561,6 +15571,41 @@ W:	http://www.linux-mm.org
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/akpm/mm
 F:	mm/gup.c
 
+MEMORY MANAGEMENT - KSM (Kernel Samepage Merging)
+M:	Andrew Morton <akpm@linux-foundation.org>
+M:	David Hildenbrand <david@redhat.com>
+R:	Xu Xin <xu.xin16@zte.com.cn>
+R:	Chengming Zhou <chengming.zhou@linux.dev>
+L:	linux-mm@kvack.org
+S:	Maintained
+W:	http://www.linux-mm.org
+T:	git git://git.kernel.org/pub/scm/linux/kernel/git/akpm/mm
+F:	Documentation/admin-guide/mm/ksm.rst
+F:	Documentation/mm/ksm.rst
+F:	include/linux/ksm.h
+F:	include/trace/events/ksm.h
+F:	mm/ksm.c
+
+MEMORY MANAGEMENT - MEMORY POLICY AND MIGRATION
+M:	Andrew Morton <akpm@linux-foundation.org>
+M:	David Hildenbrand <david@redhat.com>
+R:	Zi Yan <ziy@nvidia.com>
+R:	Matthew Brost <matthew.brost@intel.com>
+R:	Joshua Hahn <joshua.hahnjy@gmail.com>
+R:	Rakie Kim <rakie.kim@sk.com>
+R:	Byungchul Park <byungchul@sk.com>
+R:	Gregory Price <gourry@gourry.net>
+R:	Ying Huang <ying.huang@linux.alibaba.com>
+L:	linux-mm@kvack.org
+S:	Maintained
+W:	http://www.linux-mm.org
+T:	git git://git.kernel.org/pub/scm/linux/kernel/git/akpm/mm
+F:	include/linux/mempolicy.h
+F:	include/linux/migrate.h
+F:	mm/mempolicy.c
+F:	mm/migrate.c
+F:	mm/migrate_device.c
+
 MEMORY MANAGEMENT - NUMA MEMBLOCKS AND NUMA EMULATION
 M:	Andrew Morton <akpm@linux-foundation.org>
 M:	Mike Rapoport <rppt@kernel.org>
@@ -15573,7 +15618,7 @@ F:	mm/numa_memblks.c
 
 MEMORY MANAGEMENT - PAGE ALLOCATOR
 M:	Andrew Morton <akpm@linux-foundation.org>
-R:	Vlastimil Babka <vbabka@suse.cz>
+M:	Vlastimil Babka <vbabka@suse.cz>
 R:	Suren Baghdasaryan <surenb@google.com>
 R:	Michal Hocko <mhocko@suse.com>
 R:	Brendan Jackman <jackmanb@google.com>
@@ -15581,10 +15626,25 @@ R:	Johannes Weiner <hannes@cmpxchg.org>
 R:	Zi Yan <ziy@nvidia.com>
 L:	linux-mm@kvack.org
 S:	Maintained
+F:	include/linux/compaction.h
+F:	include/linux/gfp.h
+F:	include/linux/page-isolation.h
 F:	mm/compaction.c
 F:	mm/page_alloc.c
-F:	include/linux/gfp.h
-F:	include/linux/compaction.h
+F:	mm/page_isolation.c
+
+MEMORY MANAGEMENT - RECLAIM
+M:	Andrew Morton <akpm@linux-foundation.org>
+M:	Johannes Weiner <hannes@cmpxchg.org>
+R:	David Hildenbrand <david@redhat.com>
+R:	Michal Hocko <mhocko@kernel.org>
+R:	Qi Zheng <zhengqi.arch@bytedance.com>
+R:	Shakeel Butt <shakeel.butt@linux.dev>
+R:	Lorenzo Stoakes <lorenzo.stoakes@oracle.com>
+L:	linux-mm@kvack.org
+S:	Maintained
+F:	mm/pt_reclaim.c
+F:	mm/vmscan.c
 
 MEMORY MANAGEMENT - RMAP (REVERSE MAPPING)
 M:	Andrew Morton <akpm@linux-foundation.org>
@@ -20453,14 +20513,14 @@ READ-COPY UPDATE (RCU)
 M:	"Paul E. McKenney" <paulmck@kernel.org>
 M:	Frederic Weisbecker <frederic@kernel.org> (kernel/rcu/tree_nocb.h)
 M:	Neeraj Upadhyay <neeraj.upadhyay@kernel.org> (kernel/rcu/tasks.h)
-M:	Joel Fernandes <joel@joelfernandes.org>
+M:	Joel Fernandes <joelagnelf@nvidia.com>
 M:	Josh Triplett <josh@joshtriplett.org>
 M:	Boqun Feng <boqun.feng@gmail.com>
 M:	Uladzislau Rezki <urezki@gmail.com>
 R:	Steven Rostedt <rostedt@goodmis.org>
 R:	Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
 R:	Lai Jiangshan <jiangshanlai@gmail.com>
-R:	Zqiang <qiang.zhang1211@gmail.com>
+R:	Zqiang <qiang.zhang@linux.dev>
 L:	rcu@vger.kernel.org
 S:	Supported
 W:	http://www.rdrop.com/users/paulmck/RCU/
@@ -20613,8 +20673,8 @@ F:	Documentation/devicetree/bindings/i2c/renesas,iic-emev2.yaml
 F:	drivers/i2c/busses/i2c-emev2.c
 
 RENESAS ETHERNET AVB DRIVER
-M:	Paul Barker <paul.barker.ct@bp.renesas.com>
 M:	Niklas Söderlund <niklas.soderlund@ragnatech.se>
+R:	Paul Barker <paul@pbarker.dev>
 L:	netdev@vger.kernel.org
 L:	linux-renesas-soc@vger.kernel.org
 S:	Maintained
@@ -25912,7 +25972,7 @@ F:	tools/testing/vsock/
 
 VMALLOC
 M:	Andrew Morton <akpm@linux-foundation.org>
-R:	Uladzislau Rezki <urezki@gmail.com>
+M:	Uladzislau Rezki <urezki@gmail.com>
 L:	linux-mm@kvack.org
 S:	Maintained
 W:	http://www.linux-mm.org
@@ -26308,7 +26368,7 @@ R:	Ahmed S. Darwish <darwi@linutronix.de>
 L:	x86-cpuid@lists.linux.dev
 S:	Maintained
 W:	https://x86-cpuid.org
-F:	tools/arch/x86/kcpuid/cpuid.csv
+F:	tools/arch/x86/kcpuid/
 
 X86 ENTRY CODE
 M:	Andy Lutomirski <luto@kernel.org>
@@ -26835,6 +26895,14 @@ M:	Tony W Wang-oc <TonyWWang-oc@zhaoxin.com>
 L:	linux-kernel@vger.kernel.org
 S:	Maintained
 F:	arch/x86/kernel/cpu/zhaoxin.c
+
+ZONED LOOP DEVICE
+M:	Damien Le Moal <dlemoal@kernel.org>
+R:	Christoph Hellwig <hch@lst.de>
+L:	linux-block@vger.kernel.org
+S:	Maintained
+F:	Documentation/admin-guide/blockdev/zoned_loop.rst
+F:	drivers/block/zloop.c
 
 ZONEFS FILESYSTEM
 M:	Damien Le Moal <dlemoal@kernel.org>
