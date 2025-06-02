@@ -115,6 +115,8 @@ struct rnbd_clt_dev {
 	u32			clt_device_id;
 	struct mutex		lock;
 	enum rnbd_clt_dev_state	dev_state;
+	enum rnbd_io_mode	io_mode; /* user requested */
+	enum rnbd_io_mode	remote_io_mode; /* server really used */
 	refcount_t		refcount;
 	char			*pathname;
 	enum rnbd_access_mode	access_mode;
@@ -133,6 +135,7 @@ struct rnbd_clt_dev *rnbd_clt_map_device(const char *sessname,
 					   size_t path_cnt, u16 port_nr,
 					   const char *pathname,
 					   enum rnbd_access_mode access_mode,
+					   enum rnbd_io_mode io_mode,
 					   u32 nr_poll_queues);
 int rnbd_clt_unmap_device(struct rnbd_clt_dev *dev, bool force,
 			   const struct attribute *sysfs_self);

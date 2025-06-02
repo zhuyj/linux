@@ -556,6 +556,7 @@ static int send_msg_open(struct rnbd_clt_dev *dev, enum wait_type wait)
 
 	msg.hdr.type	= cpu_to_le16(RNBD_MSG_OPEN);
 	msg.access_mode	= dev->access_mode;
+	msg.io_mode	= dev->io_mode;
 	strscpy(msg.dev_name, dev->pathname, sizeof(msg.dev_name));
 
 	WARN_ON(!rnbd_clt_get_dev(dev));
@@ -1401,6 +1402,7 @@ static int rnbd_client_setup_device(struct rnbd_clt_dev *dev,
 
 static struct rnbd_clt_dev *init_dev(struct rnbd_clt_session *sess,
 				      enum rnbd_access_mode access_mode,
+				      enum rnbd_io_mode io_mode,
 				      const char *pathname,
 				      u32 nr_poll_queues)
 {
@@ -1440,6 +1442,8 @@ static struct rnbd_clt_dev *init_dev(struct rnbd_clt_session *sess,
 	dev->clt_device_id	= ret;
 	dev->sess		= sess;
 	dev->access_mode	= access_mode;
+	dev->io_mode		= io_mode;
+	dev->remote_io_mode	= io_mode;
 	dev->nr_poll_queues	= nr_poll_queues;
 	mutex_init(&dev->lock);
 	refcount_set(&dev->refcount, 1);
@@ -1528,6 +1532,7 @@ struct rnbd_clt_dev *rnbd_clt_map_device(const char *sessname,
 					   size_t path_cnt, u16 port_nr,
 					   const char *pathname,
 					   enum rnbd_access_mode access_mode,
+					   enum rnbd_io_mode io_mode,
 					   u32 nr_poll_queues)
 {
 	struct rnbd_clt_session *sess;
@@ -1548,7 +1553,7 @@ struct rnbd_clt_dev *rnbd_clt_map_device(const char *sessname,
 	if (IS_ERR(sess))
 		return ERR_CAST(sess);
 
-	dev = init_dev(sess, access_mode, pathname, nr_poll_queues);
+	dev = init_dev(sess, access_mode, io_mode, pathname, nr_poll_queues);
 	if (IS_ERR(dev)) {
 		pr_err("map_device: failed to map device '%s' from session %s, can't initialize device, err: %pe\n",
 		       pathname, sess->sessname, dev);
@@ -1576,8 +1581,9 @@ struct rnbd_clt_dev *rnbd_clt_map_device(const char *sessname,
 	iu->dev = dev;
 	sg_init_one(iu->sgt.sgl, rsp, sizeof(*rsp));
 
-	msg.hdr.type    = cpu_to_le16(RNBD_MSG_OPEN);
-	msg.access_mode = dev->access_mode;
+	msg.hdr.type	= cpu_to_le16(RNBD_MSG_OPEN);
+	msg.access_mode	= dev->access_mode;
+	msg.io_mode	= io_mode;
 	strscpy(msg.dev_name, dev->pathname, sizeof(msg.dev_name));
 
 	WARN_ON(!rnbd_clt_get_dev(dev));
@@ -1609,7 +1615,7 @@ struct rnbd_clt_dev *rnbd_clt_map_device(const char *sessname,
 	}
 
 	rnbd_clt_info(dev,
-		       "map_device: Device mapped as %s (nsectors: %llu, logical_block_size: %d, physical_block_size: %d, max_write_zeroes_sectors: %d, max_discard_sectors: %d, discard_granularity: %d, discard_alignment: %d, secure_discard: %d, max_segments: %d, max_hw_sectors: %d, wc: %d, fua: %d)\n",
+		       "map_device: Device mapped as %s (nsectors: %llu, logical_block_size: %d, physical_block_size: %d, max_write_zeroes_sectors: %d, max_discard_sectors: %d, discard_granularity: %d, discard_alignment: %d, secure_discard: %d, max_segments: %d, max_hw_sectors: %d, wc: %d, fua: %d, io_mode: %s)\n",
 		       dev->gd->disk_name, le64_to_cpu(rsp->nsectors),
 		       le16_to_cpu(rsp->logical_block_size),
 		       le16_to_cpu(rsp->physical_block_size),
@@ -1620,7 +1626,8 @@ struct rnbd_clt_dev *rnbd_clt_map_device(const char *sessname,
 		       le16_to_cpu(rsp->secure_discard),
 		       sess->max_segments, sess->max_io_size / SECTOR_SIZE,
 		       !!(rsp->cache_policy & RNBD_WRITEBACK),
-		       !!(rsp->cache_policy & RNBD_FUA));
+		       !!(rsp->cache_policy & RNBD_FUA),
+		       rnbd_io_modes[rsp->io_mode].str);
 
 	mutex_unlock(&dev->lock);
 	kfree(rsp);
