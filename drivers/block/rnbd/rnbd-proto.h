@@ -238,7 +238,7 @@ static inline bool rnbd_flags_supported(u32 flags)
 	return true;
 }
 
-static inline blk_opf_t rnbd_to_bio_flags(u32 rnbd_opf)
+static inline blk_opf_t rnbd_to_bio_flags(u32 rnbd_opf, blk_opf_t write_opf)
 {
 	blk_opf_t bio_opf;
 
@@ -247,7 +247,7 @@ static inline blk_opf_t rnbd_to_bio_flags(u32 rnbd_opf)
 		bio_opf = REQ_OP_READ;
 		break;
 	case RNBD_OP_WRITE:
-		bio_opf = REQ_OP_WRITE;
+		bio_opf = write_opf;
 		break;
 	case RNBD_OP_FLUSH:
 		bio_opf = REQ_OP_WRITE | REQ_PREFLUSH;

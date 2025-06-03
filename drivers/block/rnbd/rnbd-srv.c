@@ -60,6 +60,82 @@ MODULE_PARM_DESC(dev_search_path,
 		 "Sets the dev_search_path. When a device is mapped this path is prepended to the device path from the map device operation.  If %SESSNAME% is specified in a path, then device will be searched in a session namespace. (default: "
 		 DEFAULT_DEV_SEARCH_PATH ")");
 
+static char write_req_drv[BDEVNAME_SIZE] = "";
+
+static int write_req_drv_set(const char *val, const struct kernel_param *kp)
+{
+	char *ptr = skip_spaces(val);
+	size_t len = strlen(ptr);
+
+	if (len >= sizeof(write_req_drv))
+		return -EINVAL;
+
+	snprintf(write_req_drv, sizeof(write_req_drv), "%s", ptr);
+	while (len > 0 && isspace(write_req_drv[len - 1]))
+		write_req_drv[--len] = '\0';
+
+	if (len > 0)
+		pr_info("write_req_drv changed to '%s'\n", write_req_drv);
+
+	return 0;
+}
+
+static struct kparam_string write_req_drv_kparam_str = {
+	.maxlen	= sizeof(write_req_drv),
+	.string	= write_req_drv,
+};
+
+static const struct kernel_param_ops write_req_drv_ops = {
+	.set	= write_req_drv_set,
+	.get	= param_get_string,
+};
+
+module_param_cb(write_req_drv, &write_req_drv_ops,
+		&write_req_drv_kparam_str, 0444);
+MODULE_PARM_DESC(write_req_drv,
+		 "Name of driver which should get REQ_DRV flag or'ed into write bio's bi_opf field.");
+
+static int def_io_mode = RNBD_BLOCKIO;
+static char def_io_mode_str[10] = "blockio";
+
+static int def_io_mode_set(const char *val, const struct kernel_param *kp)
+{
+	char *io_mode, *io_mode_tmp;
+
+	io_mode_tmp = kstrdup(val, GFP_KERNEL);
+	if (!io_mode_tmp)
+		return -ENOMEM;
+
+	io_mode = strstrip(io_mode_tmp);
+
+	if (sysfs_streq(io_mode, "fileio") || sysfs_streq(io_mode, "0")) {
+		def_io_mode = RNBD_FILEIO;
+		strscpy(def_io_mode_str, io_mode, sizeof(def_io_mode_str));
+	} else if (sysfs_streq(io_mode, "blockio") ||
+		   sysfs_streq(io_mode, "1")) {
+		def_io_mode = RNBD_BLOCKIO;
+		strscpy(def_io_mode_str, io_mode, sizeof(def_io_mode_str));
+	} else {
+		kfree(io_mode_tmp);
+		return -EINVAL;
+	}
+	kfree(io_mode_tmp);
+	return 0;
+}
+
+static struct kparam_string def_io_mode_kparam_str = {
+	.maxlen	= sizeof(def_io_mode_str),
+	.string	= def_io_mode_str
+};
+
+static const struct kernel_param_ops def_io_mode_ops = {
+	.set	= def_io_mode_set,
+	.get	= param_get_string,
+};
+module_param_cb(def_io_mode, &def_io_mode_ops, &def_io_mode_kparam_str, 0444);
+MODULE_PARM_DESC(def_io_mode,
+		 "By default, export devices in blockio or fileio mode. (default: (blockio))");
+
 static DEFINE_MUTEX(sess_lock);
 static DEFINE_SPINLOCK(dev_lock);
 
@@ -149,7 +225,6 @@ static int process_rdma(struct rnbd_srv_session *srv_sess,
 			rnbd_to_bio_flags(le32_to_cpu(msg->rw)), GFP_KERNEL);
 	bio_add_virt_nofail(bio, data, datalen);
 
-	bio->bi_opf = rnbd_to_bio_flags(le32_to_cpu(msg->rw));
 	if (bio_has_data(bio) &&
 	    bio->bi_iter.bi_size != le32_to_cpu(msg->bi_size)) {
 		rnbd_srv_err_rl(sess_dev, "Datalen mismatch:  bio bi_size (%u), bi_size (%u)\n",
@@ -566,6 +641,8 @@ rnbd_srv_create_set_sess_dev(struct rnbd_srv_session *srv_sess,
 			      struct rnbd_srv_dev *srv_dev)
 {
 	struct rnbd_srv_sess_dev *sdev = rnbd_sess_dev_alloc(srv_sess);
+	char buf[BDEVNAME_SIZE];
+	size_t len;
 
 	if (IS_ERR(sdev))
 		return sdev;
@@ -579,6 +656,15 @@ rnbd_srv_create_set_sess_dev(struct rnbd_srv_session *srv_sess,
 	sdev->dev		= srv_dev;
 	sdev->readonly		= readonly;
 	sdev->access_mode	= open_msg->access_mode;
+	sdev->write_opf		= REQ_OP_WRITE;
+	sdev->rnbd_dev->io_mode	= open_msg->io_mode;
+
+	len = strnlen(write_req_drv, sizeof(buf));
+	if (len > 0) {
+		snprintf(buf, sizeof(buf), "%pg", file_bdev(bdev_file));
+		if (!strncmp(buf, write_req_drv, len))
+			sdev->write_opf |= REQ_DRV;
+	}
 
 	return sdev;
 }

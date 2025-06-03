@@ -57,6 +57,9 @@ struct rnbd_srv_sess_dev {
 	struct completion               *destroy_comp;
 	char				pathname[NAME_MAX];
 	enum rnbd_access_mode		access_mode;
+	/* REQ_OP_WRITE + ev. REQ_DRV for <write_req_drv> */
+	blk_opf_t			write_opf;
+	enum rnbd_io_mode		io_mode;
 };
 
 void rnbd_srv_sess_dev_force_close(struct rnbd_srv_sess_dev *sess_dev,
