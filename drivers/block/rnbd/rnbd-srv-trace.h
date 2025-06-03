@@ -151,6 +151,16 @@ TRACE_DEFINE_ENUM(RNBD_ACCESS_MIGRATION);
 		{ RNBD_ACCESS_RW,		"RW" }, \
 		{ RNBD_ACCESS_MIGRATION,	"MIGRATION" })
 
+TRACE_DEFINE_ENUM(RNBD_FILEIO);
+TRACE_DEFINE_ENUM(RNBD_BLOCKIO);
+TRACE_DEFINE_ENUM(RNBD_AUTOIO);
+
+#define show_rnbd_io_mode(x) \
+	__print_symbolic(x, \
+		{ RNBD_FILEIO,		"FILEIO" }, \
+		{ RNBD_BLOCKIO,		"BLOCKIO" }, \
+		{ RNBD_AUTOIO,		"AUTOIO" })
+
 TRACE_EVENT(process_msg_open,
 	TP_PROTO(struct rnbd_srv_session *srv,
 		 const struct rnbd_msg_open *msg),
@@ -159,20 +169,23 @@ TRACE_EVENT(process_msg_open,
 
 	TP_STRUCT__entry(
 		__field(u8, access_mode)
+		__field(u8, io_mode)
 		__string(sessname, srv->sessname)
 		__string(dev_name, msg->dev_name)
 	),
 
 	TP_fast_assign(
-		__entry->access_mode = msg->access_mode;
+		__entry->access_mode	= msg->access_mode;
+		__entry->io_mode	= msg->io_mode;
 		__assign_str(sessname);
 		__assign_str(dev_name);
 	),
 
-	TP_printk("Open message received: session='%s' path='%s' access_mode=%s",
+	TP_printk("Open message received: session='%s' path='%s' access_mode=%si io_mode=%s",
 		   __get_str(sessname),
 		   __get_str(dev_name),
-		   show_rnbd_access_mode(__entry->access_mode)
+		   show_rnbd_access_mode(__entry->access_mode),
+		   show_rnbd_io_mode(__entry->io_mode)
 	)
 );
 
