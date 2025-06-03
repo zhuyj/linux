@@ -663,9 +663,7 @@ static void rnbd_srv_fill_msg_open_rsp(struct rnbd_msg_open_rsp *rsp,
 	if (bdev_fua(bdev))
 		rsp->cache_policy |= RNBD_FUA;
 
-	/* Currently rnbd_dev is only for fileio mode */
-	if (sess_dev->rnbd_dev)
-		rsp->io_mode = sess_dev->rnbd_dev->io_mode;
+	rsp->io_mode = sess_dev->rnbd_dev->io_mode;
 }
 
 static struct rnbd_srv_sess_dev *
@@ -805,16 +803,6 @@ static void rnbd_endio(void *priv, int error)
 	kfree(priv);
 }
 
-static void rnbd_io_mode_set(const struct rnbd_msg_open *open_msg, enum rnbd_io_mode *io_mode)
-{
-	if (open_msg->io_mode == RNBD_BLOCKIO)
-		*io_mode = RNBD_BLOCKIO;
-	else if (open_msg->io_mode == RNBD_FILEIO)
-		*io_mode = RNBD_FILEIO;
-	else
-		*io_mode = def_io_mode;
-}
-
 static int process_msg_open(struct rnbd_srv_session *srv_sess,
 			    const void *msg, size_t len,
 			    void *data, size_t datalen)
@@ -864,7 +852,9 @@ static int process_msg_open(struct rnbd_srv_session *srv_sess,
 	}
 
 	/*Based on msg, set io_mode */
-	rnbd_io_mode_set(open_msg, &io_mode);
+	rnbd_io_mode_set_msg(open_msg, &io_mode, def_io_mode);
+
+	rnbd_get_block_size(open_msg, full_path, &io_mode);
 
 	/* rnbd_dev_open handles fileio and blockio */
 	rnbd_dev = rnbd_dev_open(full_path, open_flags, io_mode, rnbd_endio);

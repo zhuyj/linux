@@ -229,6 +229,31 @@ int rnbd_dev_file_submit_io(struct rnbd_dev *dev, sector_t sector,
 	return 0;
 }
 
+/* In this function, if reqest block size is different from the actual block size,
+ * the io_mode should be fileio.
+ */
+int rnbd_get_block_size(const struct rnbd_msg_open *msg, char *path,
+			enum rnbd_io_mode *io_mode)
+{
+	struct file *bdev_file;
+	unsigned int logical_bs, physical_bs;
+
+	bdev_file = bdev_file_open_by_path(path, FMODE_READ, THIS_MODULE, NULL);
+	if (IS_ERR(bdev_file)) {
+		pr_err("bdev error, error: %pe", bdev_file);
+		return PTR_ERR(bdev_file);
+	}
+
+	logical_bs	= bdev_logical_block_size(file_bdev(bdev_file));
+	physical_bs	= bdev_physical_block_size(file_bdev(bdev_file));
+
+	pr_warn("%s +%d logical bs: %u, physical bs: %u, designate_bs: %u\n",
+		__FILE__, __LINE__, logical_bs, physical_bs, msg->designate_bs);
+	fput(bdev_file);
+
+	return 0;
+}
+
 static int rnbd_get_actual_block_size(char *path)
 {
 	unsigned int logical_bs;
@@ -412,4 +437,15 @@ int rnbd_handle_io_mode(u8 io_mode_bs, int def_io_mode, char *path, enum rnbd_io
 	}
 
 	return 0;
+}
+
+void rnbd_io_mode_set_msg(const struct rnbd_msg_open *open_msg, enum rnbd_io_mode *io_mode,
+			int def_io_mode)
+{
+	if (open_msg->io_mode == RNBD_BLOCKIO)
+		*io_mode = RNBD_BLOCKIO;
+	else if (open_msg->io_mode == RNBD_FILEIO)
+		*io_mode = RNBD_FILEIO;
+	else
+		*io_mode = def_io_mode;
 }

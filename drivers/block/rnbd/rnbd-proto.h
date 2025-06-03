@@ -135,7 +135,8 @@ struct rnbd_msg_open {
 	u8		access_mode;
 	u8		io_mode;
 	s8		dev_name[NAME_MAX];
-	u8		reserved[3];
+	u8		designate_bs; /* 9: ilog2(512), ilog2(4096). If not specified, 0 */
+	u8		reserved[2];
 };
 
 /**
@@ -188,7 +189,8 @@ struct rnbd_msg_open_rsp {
 	u8			obsolete_rotational;
 	u8			cache_policy;
 	u8			io_mode;
-	u8			reserved[9];
+	u8			designate_bs;
+	u8			reserved[8];
 };
 
 /**

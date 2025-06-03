@@ -38,6 +38,7 @@ enum {
 	RNBD_OPT_IO_MODE	= 1 << 5,
 	RNBD_OPT_SESSNAME	= 1 << 6,
 	RNBD_OPT_NR_POLL_QUEUES	= 1 << 7,
+	RNBD_OPT_REQUESTED_BS   = 1 << 8,
 };
 
 static const unsigned int rnbd_opt_mandatory[] = {
@@ -53,6 +54,7 @@ static const match_table_t rnbd_opt_tokens = {
 	{RNBD_OPT_IO_MODE,		"io_mode=%s"		},
 	{RNBD_OPT_SESSNAME,		"sessname=%s"		},
 	{RNBD_OPT_NR_POLL_QUEUES,	"nr_poll_queues=%d"	},
+	{RNBD_OPT_REQUESTED_BS,		"requested_bs=%d"	},
 	{RNBD_OPT_ERR,			NULL			},
 };
 
@@ -65,6 +67,7 @@ struct rnbd_map_options {
 	enum rnbd_access_mode *access_mode;
 	enum rnbd_io_mode *io_mode;
 	u32 *nr_poll_queues;
+	u32 *requested_bs;
 };
 
 static int rnbd_clt_parse_map_options(const char *buf, size_t max_path_cnt,
@@ -77,6 +80,7 @@ static int rnbd_clt_parse_map_options(const char *buf, size_t max_path_cnt,
 	int token;
 	int ret = -EINVAL;
 	int nr_poll_queues = 0;
+	int requested_bs = 0;
 	int dest_port = 0;
 	int p_cnt = 0;
 	int i;
@@ -221,6 +225,22 @@ static int rnbd_clt_parse_map_options(const char *buf, size_t max_path_cnt,
 			*opt->nr_poll_queues = nr_poll_queues;
 			break;
 
+		case RNBD_OPT_REQUESTED_BS:
+			if (match_int(args, &requested_bs) || requested_bs < 0 ||
+				requested_bs > 0xFFFFFFFF) {
+				pr_err("bad requested bs parameter '%d'\n",
+					requested_bs);
+				ret = -EINVAL;
+				goto out;
+			}
+
+			/* Currently only 4 kinds of block size are supported */
+			if (requested_bs != 512 && requested_bs != 1024 &&
+				requested_bs != 2048 && requested_bs != 4096)
+				requested_bs = 0;
+			*opt->requested_bs = requested_bs;
+			break;
+
 		default:
 			pr_err("map_device: Unknown parameter or missing value '%s'\n",
 			       p);
@@ -282,6 +302,19 @@ static ssize_t nr_poll_queues_show(struct kobject *kobj,
 
 static struct kobj_attribute rnbd_clt_nr_poll_queues =
 	__ATTR_RO(nr_poll_queues);
+
+static ssize_t designate_bs_show(struct kobject *kobj,
+				 struct kobj_attribute *attr, char *page)
+{
+	struct rnbd_clt_dev *dev;
+
+	dev = container_of(kobj, struct rnbd_clt_dev, kobj);
+
+	return sysfs_emit(page, "%d\n", dev->designate_bs);
+}
+
+static struct kobj_attribute rnbd_clt_designate_bs =
+	__ATTR_RO(designate_bs);
 
 static ssize_t mapping_path_show(struct kobject *kobj,
 				 struct kobj_attribute *attr, char *page)
@@ -489,6 +522,7 @@ static struct attribute *rnbd_dev_attrs[] = {
 	&rnbd_clt_io_mode.attr,
 	&rnbd_clt_access_mode.attr,
 	&rnbd_clt_nr_poll_queues.attr,
+	&rnbd_clt_designate_bs.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(rnbd_dev);
@@ -539,7 +573,7 @@ static ssize_t rnbd_clt_map_device_show(struct kobject *kobj,
 					 char *page)
 {
 	return sysfs_emit(page,
-			  "Usage: echo \"[dest_port=server port number] sessname=<name of the rtrs session> path=<[srcaddr@]dstaddr> [path=<[srcaddr@]dstaddr>] device_path=<full path on remote side> [access_mode=<ro|rw|migration>] [io_mode=<fileio|blockio>] [nr_poll_queues=<number of queues>]\" > %s\n\naddr ::= [ ip:<ipv4> | ip:<ipv6> | gid:<gid> ]\n",
+			  "Usage: echo \"[dest_port=server port number] sessname=<name of the rtrs session> path=<[srcaddr@]dstaddr> [path=<[srcaddr@]dstaddr>] device_path=<full path on remote side> [access_mode=<ro|rw|migration>] [io_mode=<fileio|blockio>] [nr_poll_queues=<number of queues>] [designate_bs=<designate block size>]\" > %s\n\naddr ::= [ ip:<ipv4> | ip:<ipv6> | gid:<gid> ]\n",
 			 attr->attr.name);
 }
 
@@ -608,6 +642,7 @@ static ssize_t rnbd_clt_map_device_store(struct kobject *kobj,
 	enum rnbd_io_mode io_mode = RNBD_BLOCKIO;
 	u16 port_nr = RTRS_PORT;
 	u32 nr_poll_queues = 0;
+	u32 designated_bs = 0;
 
 	struct sockaddr_storage *addrs;
 	struct rtrs_addr paths[6];
@@ -621,6 +656,7 @@ static ssize_t rnbd_clt_map_device_store(struct kobject *kobj,
 	opt.access_mode = &access_mode;
 	opt.io_mode = &io_mode;
 	opt.nr_poll_queues = &nr_poll_queues;
+	opt.requested_bs = &designated_bs;
 	addrs = kcalloc(ARRAY_SIZE(paths) * 2, sizeof(*addrs), GFP_KERNEL);
 	if (!addrs)
 		return -ENOMEM;
@@ -634,14 +670,14 @@ static ssize_t rnbd_clt_map_device_store(struct kobject *kobj,
 	if (ret)
 		goto out;
 
-	pr_info("Mapping device %s on session %s, (access_mode: %s, io_mode: %s, nr_poll_queues: %d)\n",
+	pr_info("Mapping device %s on session %s, (access_mode: %s, io_mode: %s, nr_poll_queues: %d, designate_bs: %d)\n",
 		pathname, sessname,
 		rnbd_access_modes[access_mode].str,
 		rnbd_io_modes[io_mode].str,
-		nr_poll_queues);
+		nr_poll_queues, designated_bs);
 
 	dev = rnbd_clt_map_device(sessname, paths, path_cnt, port_nr, pathname,
-				  access_mode, io_mode, nr_poll_queues);
+				  access_mode, io_mode, nr_poll_queues, designated_bs);
 	if (IS_ERR(dev)) {
 		ret = PTR_ERR(dev);
 		goto out;

@@ -117,6 +117,7 @@ struct rnbd_clt_dev {
 	enum rnbd_clt_dev_state	dev_state;
 	enum rnbd_io_mode	io_mode; /* user requested */
 	enum rnbd_io_mode	remote_io_mode; /* server really used */
+	u8			designate_bs;
 	refcount_t		refcount;
 	char			*pathname;
 	enum rnbd_access_mode	access_mode;
@@ -136,7 +137,8 @@ struct rnbd_clt_dev *rnbd_clt_map_device(const char *sessname,
 					   const char *pathname,
 					   enum rnbd_access_mode access_mode,
 					   enum rnbd_io_mode io_mode,
-					   u32 nr_poll_queues);
+					   u32 nr_poll_queues,
+					   u32 designate_bs);
 int rnbd_clt_unmap_device(struct rnbd_clt_dev *dev, bool force,
 			   const struct attribute *sysfs_self);
 

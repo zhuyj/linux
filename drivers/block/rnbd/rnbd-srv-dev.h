@@ -69,4 +69,9 @@ void rnbd_get_io_mode_bs(u8 msg_io_mode, enum rnbd_io_mode *io_mode,
 
 int rnbd_handle_io_mode(u8 io_mode_bs, int def_io_mode, char *path,
 			enum rnbd_io_mode *io_mode);
+
+int rnbd_get_block_size(const struct rnbd_msg_open *msg, char *path,
+			enum rnbd_io_mode *io_mode);
+void rnbd_io_mode_set_msg(const struct rnbd_msg_open *open_msg, enum rnbd_io_mode *io_mode,
+		      int def_io_mode);
 #endif /* RNBD_SRV_DEV_H */
