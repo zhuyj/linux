@@ -15,6 +15,8 @@
 #include "rnbd-srv.h"
 #include "rnbd-srv-trace.h"
 
+#include "rnbd-srv-dev.h"
+
 MODULE_DESCRIPTION("RDMA Network Block Device Server");
 MODULE_LICENSE("GPL");
 
@@ -155,7 +157,7 @@ static void rnbd_sess_dev_release(struct kref *kref)
 	complete(sess_dev->destroy_comp);
 }
 
-static inline void rnbd_put_sess_dev(struct rnbd_srv_sess_dev *sess_dev)
+static void rnbd_put_sess_dev(struct rnbd_srv_sess_dev *sess_dev)
 {
 	kref_put(&sess_dev->kref, rnbd_sess_dev_release);
 }
@@ -221,8 +223,19 @@ static int process_rdma(struct rnbd_srv_session *srv_sess,
 	priv->sess_dev = sess_dev;
 	priv->id = id;
 
-	bio = bio_alloc(file_bdev(sess_dev->bdev_file), 1,
-			rnbd_to_bio_flags(le32_to_cpu(msg->rw)), GFP_KERNEL);
+	if (sess_dev->dev->io_mode == RNBD_FILEIO) {
+		struct rnbd_dev *dev = sess_dev->rnbd_dev;
+		sector_t sector = le64_to_cpu(msg->sector);
+		size_t len = datalen;
+		u32 bi_size = le32_to_cpu(msg->bi_size);
+		enum rnbd_io_flags flags = le32_to_cpu(msg->rw);
+
+		return rnbd_dev_file_submit_io(dev, sector, data, len, bi_size, flags, priv);
+	}
+
+	bio = bio_alloc(file_bdev(sess_dev->rnbd_dev->bdev_file), 1,
+			rnbd_to_bio_flags(le32_to_cpu(msg->rw), sess_dev->write_opf), GFP_KERNEL);
+
 	bio_add_virt_nofail(bio, data, datalen);
 
 	if (bio_has_data(bio) &&
@@ -302,6 +315,9 @@ void rnbd_destroy_sess_dev(struct rnbd_srv_sess_dev *sess_dev, bool keep_id)
 	if (!sess_dev->readonly)
 		sess_dev->dev->open_write_cnt--;
 	mutex_unlock(&sess_dev->dev->lock);
+
+	/* work for fileio and blockio mode */
+	rnbd_dev_close(sess_dev->rnbd_dev);
 
 	rnbd_put_srv_dev(sess_dev->dev);
 
@@ -499,7 +515,8 @@ static struct rnbd_srv_sess_dev
 	return sess_dev;
 }
 
-static struct rnbd_srv_dev *rnbd_srv_init_srv_dev(struct block_device *bdev)
+static struct rnbd_srv_dev *rnbd_srv_init_srv_dev(struct block_device *bdev,
+						  enum rnbd_io_mode mode)
 {
 	struct rnbd_srv_dev *dev;
 
@@ -508,6 +525,7 @@ static struct rnbd_srv_dev *rnbd_srv_init_srv_dev(struct block_device *bdev)
 		return ERR_PTR(-ENOMEM);
 
 	snprintf(dev->name, sizeof(dev->name), "%pg", bdev);
+	dev->io_mode = mode;
 	kref_init(&dev->kref);
 	INIT_LIST_HEAD(&dev->sess_dev_list);
 	mutex_init(&dev->lock);
@@ -541,11 +559,20 @@ rnbd_srv_find_or_add_srv_dev(struct rnbd_srv_dev *new_dev)
 
 static int rnbd_srv_check_update_open_perm(struct rnbd_srv_dev *srv_dev,
 					    struct rnbd_srv_session *srv_sess,
+					    enum rnbd_io_mode io_mode,
 					    enum rnbd_access_mode access_mode)
 {
 	int ret = 0;
 
 	mutex_lock(&srv_dev->lock);
+	if (srv_dev->io_mode != io_mode) {
+		pr_err("Mapping device '%s' for session %s in %s mode forbidden, device is already mapped from other client(s) in %s mode\n",
+		       srv_dev->name, srv_sess->sessname,
+		       rnbd_io_modes[io_mode].str,
+		       rnbd_io_modes[srv_dev->io_mode].str);
+		ret = -EINVAL;
+		goto out;
+	}
 
 	switch (access_mode) {
 	case RNBD_ACCESS_RO:
@@ -554,9 +581,10 @@ static int rnbd_srv_check_update_open_perm(struct rnbd_srv_dev *srv_dev,
 		if (srv_dev->open_write_cnt == 0)  {
 			srv_dev->open_write_cnt++;
 		} else {
-			pr_err("Mapping device '%s' for session %s with RW permissions failed. Device already opened as 'RW' by %d client(s), access mode %s.\n",
+			pr_err("Mapping device '%s' for session %s with RW permissions failed. Device already opened as 'RW' by %d client(s) in %s mode, access mode %s.\n",
 			       srv_dev->name, srv_sess->sessname,
 			       srv_dev->open_write_cnt,
+			       rnbd_io_modes[srv_dev->io_mode].str,
 			       rnbd_access_modes[access_mode].str);
 			ret = -EPERM;
 		}
@@ -565,9 +593,10 @@ static int rnbd_srv_check_update_open_perm(struct rnbd_srv_dev *srv_dev,
 		if (srv_dev->open_write_cnt < 2) {
 			srv_dev->open_write_cnt++;
 		} else {
-			pr_err("Mapping device '%s' for session %s with migration permissions failed. Device already opened as 'RW' by %d client(s), access mode %s.\n",
+			pr_err("Mapping device '%s' for session %s with migration permissions failed. Device already opened as 'RW' by %d client(s) in %s mode, access mode %s.\n",
 			       srv_dev->name, srv_sess->sessname,
 			       srv_dev->open_write_cnt,
+			       rnbd_io_modes[srv_dev->io_mode].str,
 			       rnbd_access_modes[access_mode].str);
 			ret = -EPERM;
 		}
@@ -577,7 +606,7 @@ static int rnbd_srv_check_update_open_perm(struct rnbd_srv_dev *srv_dev,
 		       srv_dev->name, srv_sess->sessname, access_mode);
 		ret = -EINVAL;
 	}
-
+out:
 	mutex_unlock(&srv_dev->lock);
 
 	return ret;
@@ -586,12 +615,13 @@ static int rnbd_srv_check_update_open_perm(struct rnbd_srv_dev *srv_dev,
 static struct rnbd_srv_dev *
 rnbd_srv_get_or_create_srv_dev(struct block_device *bdev,
 				struct rnbd_srv_session *srv_sess,
+				enum rnbd_io_mode io_mode,
 				enum rnbd_access_mode access_mode)
 {
 	int ret;
 	struct rnbd_srv_dev *new_dev, *dev;
 
-	new_dev = rnbd_srv_init_srv_dev(bdev);
+	new_dev = rnbd_srv_init_srv_dev(bdev, io_mode);
 	if (IS_ERR(new_dev))
 		return new_dev;
 
@@ -599,7 +629,7 @@ rnbd_srv_get_or_create_srv_dev(struct block_device *bdev,
 	if (dev != new_dev)
 		kfree(new_dev);
 
-	ret = rnbd_srv_check_update_open_perm(dev, srv_sess, access_mode);
+	ret = rnbd_srv_check_update_open_perm(dev, srv_sess, io_mode, access_mode);
 	if (ret) {
 		rnbd_put_srv_dev(dev);
 		return ERR_PTR(ret);
@@ -632,13 +662,18 @@ static void rnbd_srv_fill_msg_open_rsp(struct rnbd_msg_open_rsp *rsp,
 		rsp->cache_policy |= RNBD_WRITEBACK;
 	if (bdev_fua(bdev))
 		rsp->cache_policy |= RNBD_FUA;
+
+	/* Currently rnbd_dev is only for fileio mode */
+	if (sess_dev->rnbd_dev)
+		rsp->io_mode = sess_dev->rnbd_dev->io_mode;
 }
 
 static struct rnbd_srv_sess_dev *
 rnbd_srv_create_set_sess_dev(struct rnbd_srv_session *srv_sess,
 			      const struct rnbd_msg_open *open_msg,
 			      struct file *bdev_file, bool readonly,
-			      struct rnbd_srv_dev *srv_dev)
+			      struct rnbd_srv_dev *srv_dev,
+			      struct rnbd_dev *rnbd_dev)
 {
 	struct rnbd_srv_sess_dev *sdev = rnbd_sess_dev_alloc(srv_sess);
 	char buf[BDEVNAME_SIZE];
@@ -676,7 +711,7 @@ static char *rnbd_srv_get_full_path(struct rnbd_srv_session *srv_sess,
 	char *a, *b;
 	int len;
 
-	full_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	full_path = kzalloc(PATH_MAX, GFP_KERNEL);
 	if (!full_path)
 		return ERR_PTR(-ENOMEM);
 
@@ -758,18 +793,42 @@ find_srv_sess_dev(struct rnbd_srv_session *srv_sess, const char *dev_name)
 	return NULL;
 }
 
+static void rnbd_endio(void *priv, int error)
+{
+	struct rnbd_io_private *rnbd_priv = priv;
+	struct rnbd_srv_sess_dev *sess_dev = rnbd_priv->sess_dev;
+
+	rnbd_put_sess_dev(sess_dev);
+
+	rtrs_srv_resp_rdma(rnbd_priv->id, error);
+
+	kfree(priv);
+}
+
+static void rnbd_io_mode_set(const struct rnbd_msg_open *open_msg, enum rnbd_io_mode *io_mode)
+{
+	if (open_msg->io_mode == RNBD_BLOCKIO)
+		*io_mode = RNBD_BLOCKIO;
+	else if (open_msg->io_mode == RNBD_FILEIO)
+		*io_mode = RNBD_FILEIO;
+	else
+		*io_mode = def_io_mode;
+}
+
 static int process_msg_open(struct rnbd_srv_session *srv_sess,
 			    const void *msg, size_t len,
 			    void *data, size_t datalen)
 {
-	int ret;
-	struct rnbd_srv_dev *srv_dev;
-	struct rnbd_srv_sess_dev *srv_sess_dev;
 	const struct rnbd_msg_open *open_msg = msg;
-	struct file *bdev_file;
+	struct rnbd_srv_sess_dev *srv_sess_dev;
 	blk_mode_t open_flags = BLK_OPEN_READ;
-	char *full_path;
 	struct rnbd_msg_open_rsp *rsp = data;
+	struct rnbd_srv_dev *srv_dev;
+	struct rnbd_dev *rnbd_dev;
+	enum rnbd_io_mode io_mode;
+	struct file *bdev_file;
+	char *full_path;
+	int ret;
 
 	trace_process_msg_open(srv_sess, open_msg);
 
@@ -804,27 +863,31 @@ static int process_msg_open(struct rnbd_srv_session *srv_sess,
 		goto reject;
 	}
 
-	bdev_file = bdev_file_open_by_path(full_path, open_flags, NULL, NULL);
-	if (IS_ERR(bdev_file)) {
-		ret = PTR_ERR(bdev_file);
-		pr_err("Opening device '%s' on session %s failed, failed to open the block device, err: %pe\n",
-		       full_path, srv_sess->sessname, bdev_file);
+	/*Based on msg, set io_mode */
+	rnbd_io_mode_set(open_msg, &io_mode);
+
+	/* rnbd_dev_open handles fileio and blockio */
+	rnbd_dev = rnbd_dev_open(full_path, open_flags, io_mode, rnbd_endio);
+	if (IS_ERR(rnbd_dev)) {
+		pr_err("Opening device '%s' on session %s failed, err: %pe\n",
+			full_path, srv_sess->sessname, rnbd_dev);
+		ret = PTR_ERR(rnbd_dev);
 		goto free_path;
 	}
 
-	srv_dev = rnbd_srv_get_or_create_srv_dev(file_bdev(bdev_file), srv_sess,
+	srv_dev = rnbd_srv_get_or_create_srv_dev(file_bdev(bdev_file), srv_sess, io_mode,
 						  open_msg->access_mode);
 	if (IS_ERR(srv_dev)) {
 		pr_err("Opening device '%s' on session %s failed, creating srv_dev failed, err: %pe\n",
 		       full_path, srv_sess->sessname, srv_dev);
 		ret = PTR_ERR(srv_dev);
-		goto blkdev_put;
+		goto dev_close;
 	}
 
 	srv_sess_dev = rnbd_srv_create_set_sess_dev(srv_sess, open_msg,
 				bdev_file,
 				open_msg->access_mode == RNBD_ACCESS_RO,
-				srv_dev);
+				srv_dev, rnbd_dev);
 	if (IS_ERR(srv_sess_dev)) {
 		pr_err("Opening device '%s' on session %s failed, creating sess_dev failed, err: %pe\n",
 		       full_path, srv_sess->sessname, srv_sess_dev);
@@ -860,7 +923,7 @@ static int process_msg_open(struct rnbd_srv_session *srv_sess,
 	list_add(&srv_sess_dev->dev_list, &srv_dev->sess_dev_list);
 	mutex_unlock(&srv_dev->lock);
 
-	rnbd_srv_info(srv_sess_dev, "Opened device '%s'\n", srv_dev->name);
+	rnbd_srv_info(srv_sess_dev, "Opened device '%s' in %s mode\n", srv_dev->name, rnbd_io_modes[io_mode].str);
 
 	kfree(full_path);
 
@@ -880,8 +943,8 @@ srv_dev_put:
 		mutex_unlock(&srv_dev->lock);
 	}
 	rnbd_put_srv_dev(srv_dev);
-blkdev_put:
-	fput(bdev_file);
+dev_close:
+	rnbd_dev_close(rnbd_dev);
 free_path:
 	kfree(full_path);
 reject:
@@ -912,9 +975,17 @@ static int __init rnbd_srv_init_module(void)
 		return PTR_ERR(rtrs_ctx);
 	}
 
+	err = rnbd_dev_init();
+	if (err) {
+		pr_err("rnbd_dev_init(), err: %pe\n", ERR_PTR(err));
+		rtrs_srv_close(rtrs_ctx);
+		return err;
+	}
+
 	err = rnbd_srv_create_sysfs_files();
 	if (err) {
 		pr_err("rnbd_srv_create_sysfs_files(), err: %d\n", err);
+		rnbd_dev_destroy();
 		rtrs_srv_close(rtrs_ctx);
 	}
 
@@ -925,6 +996,7 @@ static void __exit rnbd_srv_cleanup_module(void)
 {
 	rtrs_srv_close(rtrs_ctx);
 	WARN_ON(!list_empty(&sess_list));
+	rnbd_dev_destroy();
 	rnbd_srv_destroy_sysfs_files();
 }
 

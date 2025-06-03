@@ -107,11 +107,27 @@ struct rnbd_msg_sess_info_rsp {
 	u8		reserved[31];
 };
 
+#define IO_MODE_BS_NOT_SET	0x00
+
+#define IO_MODE_FILEIO		0x01
+#define IO_MODE_BLOCKIO		0x02
+
+#define MASK_FOR_IO_MODE	0x03
+
+#define BLOCK_SIZE_NOT_SET	0x04
+#define BLOCK_SIZE_512		0x08
+#define BLOCK_SIZE_1024		0x0C
+#define BLOCK_SIZE_2048		0x10
+#define BLOCK_SIZE_4096		0x14
+
+#define MASK_FOR_BS		0xFC
+
 /**
  * struct rnbd_msg_open - request to open a remote device.
  * @hdr:		message header
  * @access_mode:	the mode to open remote device, valid values see:
  *			enum rnbd_access_mode
+ * @io_mode:		Open volume on server as block device or as file
  * @device_name:	device path on remote side
  */
 struct rnbd_msg_open {
@@ -154,6 +170,7 @@ enum rnbd_cache_policy {
  * @secure_discard:	supports secure discard
  * @obsolete_rotational: obsolete, not in used.
  * @cache_policy: 	support write-back caching or FUA?
+ * @io_mode:		io_mode device is opened.
  */
 struct rnbd_msg_open_rsp {
 	struct rnbd_msg_hdr	hdr;
@@ -329,6 +346,40 @@ static inline u32 rq_to_rnbd_flags(struct request *rq)
 		rnbd_opf |= RNBD_F_FUA;
 
 	return rnbd_opf;
+}
+
+static inline int rnbd_get_bs(u8 io_mode_bs)
+{
+	int requested_bs;
+
+	if ((io_mode_bs & MASK_FOR_BS) == BLOCK_SIZE_512)
+		requested_bs = 512;
+	else if ((io_mode_bs & MASK_FOR_BS) == BLOCK_SIZE_1024)
+		requested_bs = 1024;
+	else if ((io_mode_bs & MASK_FOR_BS) == BLOCK_SIZE_2048)
+		requested_bs = 2048;
+	else if ((io_mode_bs & MASK_FOR_BS) == BLOCK_SIZE_4096)
+		requested_bs = 4096;
+	else
+		requested_bs = 0;
+
+	return requested_bs;
+}
+
+static inline bool rnbd_check_bs_not_set(u8 io_mode_bs)
+{
+	if ((io_mode_bs & MASK_FOR_BS) == BLOCK_SIZE_NOT_SET)
+		return true;
+
+	return false;
+}
+
+static inline bool rnbd_check_set_io_mode_bs(u8 io_mode_bs)
+{
+	if (io_mode_bs == IO_MODE_BS_NOT_SET)
+		return false;
+
+	return true;
 }
 
 const char *rnbd_access_mode_str(enum rnbd_access_mode mode);

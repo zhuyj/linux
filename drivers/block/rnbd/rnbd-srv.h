@@ -40,6 +40,7 @@ struct rnbd_srv_dev {
 	struct list_head		sess_dev_list;
 	struct mutex			lock;
 	int				open_write_cnt;
+	enum rnbd_io_mode		io_mode;
 };
 
 /* Structure which binds N devices and N sessions */
@@ -47,6 +48,7 @@ struct rnbd_srv_sess_dev {
 	/* Entry inside rnbd_srv_dev struct */
 	struct list_head		dev_list;
 	struct file			*bdev_file;
+	struct rnbd_dev			*rnbd_dev;
 	struct rnbd_srv_session		*sess;
 	struct rnbd_srv_dev		*dev;
 	struct kobject                  kobj;

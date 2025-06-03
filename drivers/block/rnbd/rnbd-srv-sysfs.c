@@ -17,12 +17,36 @@
 #include <linux/device.h>
 
 #include "rnbd-srv.h"
+#include "rnbd-srv-dev.h"
 
 static struct device *rnbd_dev;
 static const struct class rnbd_dev_class = {
 	.name = "rnbd-server",
 };
 static struct kobject *rnbd_devs_kobj;
+
+static ssize_t io_mode_show(struct kobject *kobj, struct kobj_attribute *attr,
+			    char *page)
+{
+	struct rnbd_srv_dev *srv_dev;
+
+	srv_dev = container_of(kobj, struct rnbd_srv_dev, dev_kobj);
+
+	return scnprintf(page, PAGE_SIZE, "%s\n",
+			 rnbd_io_modes[srv_dev->io_mode].str);
+}
+
+static struct kobj_attribute rnbd_srv_dev_mode_attr =
+	__ATTR_RO(io_mode);
+
+static struct attribute *rnbd_srv_default_dev_attrs[] = {
+	&rnbd_srv_dev_mode_attr.attr,
+	NULL,
+};
+
+static struct attribute_group rnbd_srv_default_dev_attr_group = {
+	.attrs = rnbd_srv_default_dev_attrs,
+};
 
 static void rnbd_srv_dev_release(struct kobject *kobj)
 {
@@ -58,6 +82,11 @@ int rnbd_srv_create_dev_sysfs(struct rnbd_srv_dev *dev,
 		goto free_dev_kobj;
 	}
 
+	ret = sysfs_create_group(&dev->dev_kobj,
+				 &rnbd_srv_default_dev_attr_group);
+	if (ret)
+		goto err2;
+
 	bdev_kobj = &disk_to_dev(bdev->bd_disk)->kobj;
 	ret = sysfs_create_link(&dev->dev_kobj, bdev_kobj, "block_dev");
 	if (ret)
@@ -66,6 +95,9 @@ int rnbd_srv_create_dev_sysfs(struct rnbd_srv_dev *dev,
 	return 0;
 
 put_sess_kobj:
+	sysfs_remove_group(&dev->dev_kobj,
+			&rnbd_srv_default_dev_attr_group);
+err2:
 	kobject_put(dev->dev_sessions_kobj);
 free_dev_kobj:
 	kobject_del(&dev->dev_kobj);
@@ -76,6 +108,7 @@ free_dev_kobj:
 void rnbd_srv_destroy_dev_sysfs(struct rnbd_srv_dev *dev)
 {
 	sysfs_remove_link(&dev->dev_kobj, "block_dev");
+	sysfs_remove_group(&dev->dev_kobj, &rnbd_srv_default_dev_attr_group);
 	kobject_del(dev->dev_sessions_kobj);
 	kobject_put(dev->dev_sessions_kobj);
 	kobject_del(&dev->dev_kobj);
