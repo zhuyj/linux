@@ -663,7 +663,7 @@ static void rnbd_srv_fill_msg_open_rsp(struct rnbd_msg_open_rsp *rsp,
 	if (bdev_fua(bdev))
 		rsp->cache_policy |= RNBD_FUA;
 
-	rsp->io_mode = sess_dev->rnbd_dev->io_mode;
+	rsp->io_mode_bs = sess_dev->rnbd_dev->io_mode;
 }
 
 static struct rnbd_srv_sess_dev *
@@ -690,7 +690,7 @@ rnbd_srv_create_set_sess_dev(struct rnbd_srv_session *srv_sess,
 	sdev->readonly		= readonly;
 	sdev->access_mode	= open_msg->access_mode;
 	sdev->write_opf		= REQ_OP_WRITE;
-	sdev->rnbd_dev->io_mode	= open_msg->io_mode;
+	sdev->rnbd_dev->io_mode	= open_msg->io_mode_bs;
 
 	len = strnlen(write_req_drv, sizeof(buf));
 	if (len > 0) {
@@ -851,10 +851,12 @@ static int process_msg_open(struct rnbd_srv_session *srv_sess,
 		goto reject;
 	}
 
-	/*Based on msg, set io_mode */
-	rnbd_io_mode_set_msg(open_msg, &io_mode, def_io_mode);
+	pr_warn("%s +%d func: %s, io_mode: 0x%x\n", __FILE__, __LINE__, __func__,
+		 open_msg->io_mode_bs);
 
-	rnbd_get_block_size(open_msg, full_path, &io_mode);
+	/* Based on the received io_mode and block size, get the real io_mode in srv */
+	if (rnbd_handle_io_mode(open_msg->io_mode_bs, RNBD_BLOCKIO, full_path, &io_mode))
+		goto free_path;
 
 	/* rnbd_dev_open handles fileio and blockio */
 	rnbd_dev = rnbd_dev_open(full_path, open_flags, io_mode, rnbd_endio);

@@ -127,16 +127,28 @@ struct rnbd_msg_sess_info_rsp {
  * @hdr:		message header
  * @access_mode:	the mode to open remote device, valid values see:
  *			enum rnbd_access_mode
- * @io_mode:		Open volume on server as block device or as file
+ * @io_mode:		Open volume on server as block device or as file and block size
  * @device_name:	device path on remote side
  */
 struct rnbd_msg_open {
 	struct rnbd_msg_hdr hdr;
 	u8		access_mode;
-	u8		io_mode;
+	/* use io_mode to contain io_mode and designate block size
+	 *   7        < ----     0
+	 *  0  0  0  0  0  0  0  0
+	 *  |-  block  size  -|-io mode-|
+	 *  0x00 : io mode not set
+	 *  0x01 : fileio
+	 *  0x02 : blockio
+	 *  0x04 : block size not set
+	 *  0x08 : block size 512
+	 *  0x0c : block size 1024
+	 *  0x10 : block size 2048
+	 *  0x14 : block size 4096
+	 */
+	u8		io_mode_bs;
 	s8		dev_name[NAME_MAX];
-	u8		designate_bs; /* 9: ilog2(512), ilog2(4096). If not specified, 0 */
-	u8		reserved[2];
+	u8		reserved[3];
 };
 
 /**
@@ -188,9 +200,9 @@ struct rnbd_msg_open_rsp {
 	__le16			secure_discard;
 	u8			obsolete_rotational;
 	u8			cache_policy;
-	u8			io_mode;
-	u8			designate_bs;
-	u8			reserved[8];
+	/* The io_mode and block size are in this variable */
+	u8			io_mode_bs;
+	u8			reserved[9];
 };
 
 /**
@@ -382,6 +394,48 @@ static inline bool rnbd_check_set_io_mode_bs(u8 io_mode_bs)
 		return false;
 
 	return true;
+}
+
+static inline void rnbd_set_io_mode_bs(u8 *msg_io_mode, enum rnbd_io_mode io_mode,
+			 u32 designate_bs)
+{
+	if (io_mode == RNBD_FILEIO)
+		*msg_io_mode	|= IO_MODE_FILEIO;
+	else if (io_mode == RNBD_BLOCKIO)
+		*msg_io_mode	|= IO_MODE_BLOCKIO;
+	else /* default is BLOCKIO */
+		*msg_io_mode     |= IO_MODE_BLOCKIO;
+
+	if (designate_bs == 512)
+		*msg_io_mode	|= BLOCK_SIZE_512;
+	else if (designate_bs == 1024)
+		*msg_io_mode	|= BLOCK_SIZE_1024;
+	else if (designate_bs == 2048)
+		*msg_io_mode	|= BLOCK_SIZE_2048;
+	else if (designate_bs == 4096)
+		*msg_io_mode	|= BLOCK_SIZE_4096;
+	else /*default is block size is not set */
+		*msg_io_mode	|= BLOCK_SIZE_NOT_SET;
+}
+
+static inline void rnbd_get_io_mode_bs(u8 msg_io_mode, enum rnbd_io_mode *io_mode,
+			 u32 *designate_bs)
+{
+	if ((msg_io_mode & IO_MODE_FILEIO) == IO_MODE_FILEIO)
+		*io_mode = RNBD_FILEIO;
+	else if ((msg_io_mode & IO_MODE_BLOCKIO) == IO_MODE_BLOCKIO)
+		*io_mode = RNBD_BLOCKIO;
+
+	if ((msg_io_mode & MASK_FOR_BS) == BLOCK_SIZE_512)
+		*designate_bs = 512;
+	else if ((msg_io_mode & MASK_FOR_BS) == BLOCK_SIZE_1024)
+		*designate_bs = 1024;
+	else if ((msg_io_mode & MASK_FOR_BS) == BLOCK_SIZE_2048)
+		*designate_bs = 2048;
+	else if ((msg_io_mode & MASK_FOR_BS) == BLOCK_SIZE_4096)
+		*designate_bs = 4096;
+	else
+		*designate_bs = 0;
 }
 
 const char *rnbd_access_mode_str(enum rnbd_access_mode mode);

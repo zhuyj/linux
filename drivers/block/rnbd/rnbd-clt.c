@@ -556,7 +556,7 @@ static int send_msg_open(struct rnbd_clt_dev *dev, enum wait_type wait)
 
 	msg.hdr.type	= cpu_to_le16(RNBD_MSG_OPEN);
 	msg.access_mode	= dev->access_mode;
-	msg.io_mode	= dev->io_mode;
+	rnbd_set_io_mode_bs(&msg.io_mode_bs, dev->io_mode, dev->designate_bs);
 	strscpy(msg.dev_name, dev->pathname, sizeof(msg.dev_name));
 
 	WARN_ON(!rnbd_clt_get_dev(dev));
@@ -1590,8 +1590,7 @@ struct rnbd_clt_dev *rnbd_clt_map_device(const char *sessname,
 
 	msg.hdr.type		= cpu_to_le16(RNBD_MSG_OPEN);
 	msg.access_mode		= dev->access_mode;
-	msg.io_mode		= io_mode;
-	msg.designate_bs	= designate_bs ? ilog2(designate_bs) : 0;
+	rnbd_set_io_mode_bs(&msg.io_mode_bs, io_mode, designate_bs);
 	strscpy(msg.dev_name, dev->pathname, sizeof(msg.dev_name));
 
 	WARN_ON(!rnbd_clt_get_dev(dev));
@@ -1635,8 +1634,8 @@ struct rnbd_clt_dev *rnbd_clt_map_device(const char *sessname,
 		       sess->max_segments, sess->max_io_size / SECTOR_SIZE,
 		       !!(rsp->cache_policy & RNBD_WRITEBACK),
 		       !!(rsp->cache_policy & RNBD_FUA),
-		       rnbd_io_modes[rsp->io_mode].str,
-		       rsp->designate_bs);
+		       rnbd_io_modes[io_mode].str,
+		       designate_bs);
 
 	mutex_unlock(&dev->lock);
 	kfree(rsp);

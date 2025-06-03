@@ -169,23 +169,23 @@ TRACE_EVENT(process_msg_open,
 
 	TP_STRUCT__entry(
 		__field(u8, access_mode)
-		__field(u8, io_mode)
+		__field(u8, io_mode_bs)
 		__string(sessname, srv->sessname)
 		__string(dev_name, msg->dev_name)
 	),
 
 	TP_fast_assign(
 		__entry->access_mode	= msg->access_mode;
-		__entry->io_mode	= msg->io_mode;
+		__entry->io_mode_bs	= msg->io_mode_bs;
 		__assign_str(sessname);
 		__assign_str(dev_name);
 	),
 
-	TP_printk("Open message received: session='%s' path='%s' access_mode=%si io_mode=%s",
+	TP_printk("Open message received: session='%s' path='%s' access_mode=%si io_mode_bs=0x%x",
 		   __get_str(sessname),
 		   __get_str(dev_name),
 		   show_rnbd_access_mode(__entry->access_mode),
-		   show_rnbd_io_mode(__entry->io_mode)
+		   (__entry->io_mode_bs)
 	)
 );
 
