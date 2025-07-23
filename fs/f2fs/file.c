@@ -4856,8 +4856,7 @@ static ssize_t f2fs_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 			f2fs_update_iostat(F2FS_I_SB(inode), inode,
 						APP_BUFFERED_READ_IO, ret);
 	}
-	if (trace_f2fs_dataread_end_enabled())
-		trace_f2fs_dataread_end(inode, pos, ret);
+	trace_f2fs_dataread_end(inode, pos, ret);
 	return ret;
 }
 
@@ -4880,8 +4879,7 @@ static ssize_t f2fs_file_splice_read(struct file *in, loff_t *ppos,
 		f2fs_update_iostat(F2FS_I_SB(inode), inode,
 				   APP_BUFFERED_READ_IO, ret);
 
-	if (trace_f2fs_dataread_end_enabled())
-		trace_f2fs_dataread_end(inode, pos, ret);
+	trace_f2fs_dataread_end(inode, pos, ret);
 	return ret;
 }
 
@@ -5226,8 +5224,7 @@ static ssize_t f2fs_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 			f2fs_dio_write_iter(iocb, from, &may_need_sync) :
 			f2fs_buffered_write_iter(iocb, from);
 
-		if (trace_f2fs_datawrite_end_enabled())
-			trace_f2fs_datawrite_end(inode, orig_pos, ret);
+		trace_f2fs_datawrite_end(inode, orig_pos, ret);
 	}
 
 	/* Don't leave any preallocated blocks around past i_size. */
