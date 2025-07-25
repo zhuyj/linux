@@ -404,6 +404,7 @@ static int rxe_loopback(struct sk_buff *skb, struct rxe_pkt_info *pkt)
 	/* remove udp header */
 	skb_pull(skb, sizeof(struct udphdr));
 
+	pr_warn("%s +%d func: %s, len: %u, protocol: 0x%x\n", __FILE__, __LINE__, __func__, skb->len, skb->protocol);
 	rxe_rcv(skb);
 
 	return 0;

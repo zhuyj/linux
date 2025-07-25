@@ -63,6 +63,7 @@ struct rxe_queue *rxe_queue_init(struct rxe_dev *rxe, int *num_elem,
 	if (*num_elem < 0)
 		return NULL;
 
+	pr_warn("%s +%d func: %s, size: %lu, name: %s\n", __FILE__, __LINE__, __func__, sizeof(*q), rxe->ib_dev.name);
 	q = kzalloc(sizeof(*q), GFP_KERNEL);
 	if (!q)
 		return NULL;
