@@ -68,7 +68,7 @@ static bool smc_check_ip(__u32 src, __u32 dst)
 SEC("fmod_ret/update_socket_protocol")
 int BPF_PROG(smc_run, int family, int type, int protocol)
 {
-	struct task_struct *task;
+//	struct task_struct *task;
 
 	if (family != AF_INET && family != AF_INET6)
 		return protocol;
@@ -79,10 +79,10 @@ int BPF_PROG(smc_run, int family, int type, int protocol)
 	if (protocol != 0 && protocol != IPPROTO_TCP)
 		return protocol;
 
-	task = bpf_get_current_task_btf();
+//	task = bpf_get_current_task_btf();
 	/* Prevent from affecting other tests */
-	if (!task || !task->nsproxy->net_ns->smc.ops)
-		return protocol;
+//	if (!task || !task->nsproxy->net_ns->smc.ops)
+//		return protocol;
 
 	return IPPROTO_SMC;
 }
@@ -100,10 +100,11 @@ int BPF_PROG(bpf_smc_set_tcp_option, struct tcp_sock *tp)
 	return smc_check_ip(tp->inet_conn.icsk_inet.sk.__sk_common.skc_rcv_saddr,
 			    tp->inet_conn.icsk_inet.sk.__sk_common.skc_daddr);
 }
-
+#if 0
 SEC(".struct_ops.link")
 struct smc_ops  linkcheck = {
 	.name			= "linkcheck",
 	.set_option		= (void *) bpf_smc_set_tcp_option,
 	.set_option_cond	= (void *) bpf_smc_set_tcp_option_cond,
 };
+#endif

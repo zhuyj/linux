@@ -648,7 +648,7 @@ static int panthor_fw_read_build_info(struct panthor_device *ptdev,
 {
 	struct panthor_fw_build_info_hdr hdr;
 	char header[9];
-	const char git_sha_header[sizeof(header)] = "git_sha: ";
+	const char git_sha_header[sizeof(header)*2] = "git_sha: ";
 	int ret;
 
 	ret = panthor_fw_binary_iter_read(ptdev, iter, &hdr, sizeof(hdr));
