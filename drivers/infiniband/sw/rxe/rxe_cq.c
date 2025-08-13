@@ -25,6 +25,15 @@ int rxe_cq_chk_attr(struct rxe_dev *rxe, struct rxe_cq *cq,
 	}
 
 	if (cq) {
+		int loop_cq = 100;
+
+		count = queue_count(cq->queue, QUEUE_TYPE_TO_CLIENT);
+		while (cqe < count && loop_cq--) {
+			msleep(100);
+			cond_resched();
+			count = queue_count(cq->queue, QUEUE_TYPE_TO_CLIENT);
+		}
+
 		count = queue_count(cq->queue, QUEUE_TYPE_TO_CLIENT);
 		if (cqe < count) {
 			rxe_dbg_cq(cq, "cqe(%d) < current # elements in queue (%d)\n",
@@ -93,8 +102,23 @@ int rxe_cq_post(struct rxe_cq *cq, struct rxe_cqe *cqe, int solicited)
 
 	full = queue_full(cq->queue, QUEUE_TYPE_TO_CLIENT);
 	if (unlikely(full)) {
-		rxe_err_cq(cq, "queue full\n");
+		int loop_cq = 100;
+
 		spin_unlock_irqrestore(&cq->cq_lock, flags);
+
+		while (full && loop_cq--) {
+			msleep(100);
+			cond_resched();
+			full = queue_full(cq->queue, QUEUE_TYPE_TO_CLIENT);
+		}
+
+		full = queue_full(cq->queue, QUEUE_TYPE_TO_CLIENT);
+		if (!full) {
+			spin_lock_irqsave(&cq->cq_lock, flags);
+			goto resume1;
+		}
+
+		rxe_err_cq(cq, "queue full\n");
 		if (cq->ibcq.event_handler) {
 			ev.device = cq->ibcq.device;
 			ev.element.cq = &cq->ibcq;
@@ -105,6 +129,7 @@ int rxe_cq_post(struct rxe_cq *cq, struct rxe_cqe *cqe, int solicited)
 		return -EBUSY;
 	}
 
+resume1:
 	addr = queue_producer_addr(cq->queue, QUEUE_TYPE_TO_CLIENT);
 	memcpy(addr, cqe, sizeof(*cqe));
 
