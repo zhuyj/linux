@@ -8,7 +8,7 @@ jobs:
   build_kernel:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: sudo apt update && sudo apt install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev
@@ -20,7 +20,7 @@ jobs:
         run: make -j$(nproc)
 
       - name: Upload bzImage
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linux-kernel
           path: arch/x86/boot/bzImage
