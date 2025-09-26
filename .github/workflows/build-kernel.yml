@@ -16,6 +16,9 @@ jobs:
       - name: Set up config
         run: make defconfig
 
+      - name: Generate tags
+        run: sudo apt update -y && sudo apt install -y universal-ctags && make -j $(nproc) tags
+
       - name: Build kernel
         run: make -j$(nproc)
 
