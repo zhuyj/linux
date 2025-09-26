@@ -17,13 +17,26 @@ jobs:
         run: make defconfig
 
       - name: Generate tags
-        run: sudo apt update -y && sudo apt install -y universal-ctags && make -j $(nproc) tags
+        run: sudo apt-get update -y && sudo apt-get install -y universal-ctags && make -j $(nproc) tags
 
       - name: Build kernel
-        run: make -j$(nproc)
+        run: make -j$(nproc) | tee build.log
 
       - name: Upload bzImage
         uses: actions/upload-artifact@v4
         with:
           name: linux-kernel
           path: arch/x86/boot/bzImage
+  
+      - name: Upload build log
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-build-log
+          path: build.log
+    
+      - name: Notify user on PR or issue
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: 1   # Replace with the PR or issue number
+          body: "✅ Kernel build completed successfully! @zhuyj"
