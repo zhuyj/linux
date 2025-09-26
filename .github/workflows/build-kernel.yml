@@ -32,11 +32,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kernel-build-log
-          path: build.log
-    
-      - name: Notify user on PR or issue
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: 1   # Replace with the PR or issue number
-          body: "✅ Kernel build completed successfully! @zhuyj"
+          path: build.log @zhuyj
