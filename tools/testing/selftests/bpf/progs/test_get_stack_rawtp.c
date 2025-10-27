@@ -92,6 +92,7 @@ int bpf_prog1(void *ctx)
 	if (ksize < 0)
 		return 0;
 
+	bpf_printk("line: %d, usize: %ld, ksize: %ld\n", __LINE__, usize, ksize);
 	total_size = usize + ksize;
 	if (total_size > 0 && total_size <= max_len)
 		bpf_perf_event_output(ctx, &perfmap, 0, raw_data, total_size);

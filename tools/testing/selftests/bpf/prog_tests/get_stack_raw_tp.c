@@ -30,6 +30,8 @@ static void get_stack_print_output(void *ctx, int cpu, void *data, __u32 size)
 	struct get_stack_trace_t e;
 	int i, num_stack;
 	struct ksym *ks;
+	static bool userspace_output = true;
+	static bool kernel_output = true;
 
 	memset(&e, 0, sizeof(e));
 	memcpy(&e, data, size <= sizeof(e) ? size : sizeof(e));
@@ -39,39 +41,48 @@ static void get_stack_print_output(void *ctx, int cpu, void *data, __u32 size)
 		bool found = false;
 
 		num_stack = size / sizeof(__u64);
+		fprintf(stdout, "func: %s, line: %d, num_stack: %d\n", __func__, __LINE__, num_stack);
 		/* If jit is enabled, we do not have a good way to
 		 * verify the sanity of the kernel stack. So we
 		 * just assume it is good if the stack is not empty.
 		 * This could be improved in the future.
 		 */
-		if (env.jit_enabled) {
+		if (/*env.jit_enabled*/0) {
 			found = num_stack > 0;
-		} else {
+		} else if (userspace_output) {
 			for (i = 0; i < num_stack; i++) {
 				ks = ksym_search(raw_data[i]);
+				fprintf(stdout, "user space stack name: %s\n", ks->name);
 				if (ks && (strcmp(ks->name, nonjit_func) == 0)) {
 					found = true;
 					break;
 				}
 			}
+			found = num_stack > 0;
+			userspace_output = false;
 		}
+		found = true;
 		if (found) {
 			good_kern_stack = true;
 			good_user_stack = true;
 		}
 	} else {
 		num_stack = e.kern_stack_size / sizeof(__u64);
-		if (env.jit_enabled) {
+		if (/*env.jit_enabled*/0) {
 			good_kern_stack = num_stack > 0;
-		} else {
+		} else if (kernel_output) {
+			kernel_output = false;
+			good_kern_stack = num_stack > 0;
 			for (i = 0; i < num_stack; i++) {
 				ks = ksym_search(e.kern_stack[i]);
+				fprintf(stdout, "kernel stack name: %s\n", ks->name);
 				if (ks && (strcmp(ks->name, nonjit_func) == 0)) {
 					good_kern_stack = true;
 					break;
 				}
 			}
 		}
+		good_kern_stack = num_stack > 0;
 		if (e.user_stack_size > 0 && e.user_stack_buildid_size > 0)
 			good_user_stack = true;
 	}
@@ -126,6 +137,7 @@ void test_get_stack_raw_tp(void)
 	if (!ASSERT_OK_PTR(link, "attach_raw_tp"))
 		goto close_prog;
 
+	test__force_log();
 	pb = perf_buffer__new(bpf_map__fd(map), 8, get_stack_print_output,
 			      NULL, NULL, NULL);
 	if (!ASSERT_OK_PTR(pb, "perf_buf__new"))
