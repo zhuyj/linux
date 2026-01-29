@@ -1,0 +1,43 @@
+1. Choose Fedora Core 42
+
+2. git clone https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+
+3. v6.19-rc7
+
+4. enable the following kernel options
+"
+CONFIG_BLK_DEV_INITRD=y
+CONFIG_KEXEC_FILE=y
+CONFIG_KEXEC_HANDOVER=y
+CONFIG_KEXEC_HANDOVER_ENABLE_DEFAULT=y
+CONFIG_KEXEC_HANDOVER_DEBUGFS=y
+CONFIG_KEXEC_HANDOVER_DEBUG=y
+CONFIG_LIVEUPDATE=y
+CONFIG_MEMFD_CREATE=y
+CONFIG_TMPFS=y
+CONFIG_SHMEM=y
+"
+
+5. make -j 'nproc' binrpm-pkg
+
+6. dnf install kernel.rpm
+
+7. # cat /proc/cmdline
+root=/dev/mapper/fedora-root ro rd.lvm.lv=fedora/root rhgb quiet liveupdate=on
+
+8. reboot Fedora Core 42
+
+9. root@localhost:~/Development/linux# ls -l /boot/
+...
+lrwxrwxrwx. 1 root root        25 Jan 29 13:40 bzImage -> /boot/vmlinuz-6.19.0-rc7+
+lrwxrwxrwx. 1 root root        31 Jan 29 14:35 initramfs -> /boot/initramfs-6.19.0-rc7+.img
+...
+
+10.
+./tools/testing/selftests/liveupdate/luo_kexec_simple -s 1
+
+11.
+./tools/testing/selftests/liveupdate/do_kexec.sh
+
+12. After reboot
+./tools/testing/selftests/liveupdate/luo_kexec_simple -s 2
