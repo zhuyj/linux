@@ -858,6 +858,7 @@ err_resume:
 	luo_session_resume();
 	return err;
 }
+EXPORT_SYMBOL_GPL(liveupdate_register_file_handler);
 
 /**
  * liveupdate_unregister_file_handler - Unregister a liveupdate file handler
@@ -888,3 +889,4 @@ int liveupdate_unregister_file_handler(struct liveupdate_file_handler *fh)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(liveupdate_unregister_file_handler);
