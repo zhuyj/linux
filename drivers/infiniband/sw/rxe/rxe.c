@@ -8,6 +8,7 @@
 #include <net/addrconf.h>
 #include "rxe.h"
 #include "rxe_loc.h"
+#include "rxe_liveupdate.h"
 
 MODULE_AUTHOR("Bob Pearson, Frank Zago, John Groves, Kamal Heib");
 MODULE_DESCRIPTION("Soft RDMA transport");
@@ -260,12 +261,17 @@ static int __init rxe_module_init(void)
 	}
 
 	rdma_link_register(&rxe_link_ops);
+
+	rxe_liveupdate_init();
+
 	pr_info("loaded\n");
 	return 0;
 }
 
 static void __exit rxe_module_exit(void)
 {
+	rxe_liveupdate_cleanup();
+
 	rdma_link_unregister(&rxe_link_ops);
 	ib_unregister_driver(RDMA_DRIVER_RXE);
 	rxe_net_exit();
