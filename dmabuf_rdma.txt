@@ -1,0 +1,666 @@
+0. RDMA subsystem DMA-BUF support
+
+Today's PCIe devices are capable of using peer-to-peer transactions to
+communicate directly with other devices. This has been shown to improve
+latency with communication between a GPU and HCA [1] as well as when
+transferring between storage and an HCA [2].
+
+There is some missing functionality in the kernel to support this mode of
+operation. The RDMA subsystem uses get_user_pages() to pin user memory for
+memory regions used by its devices. There has been some attempts to add
+peer-to-peer transaction support to the kernel.
+
+First, some linux-rdma patches that attempted to extend the RDMA subsystem
+with a plugin mechanism that would detect user pointers as belonging to a
+peer device [3,4] and request the bus address mappings from the plugin.
+These has been rejected saying that the RDMA subsystem is not the place to
+keep such a plugin mechanism.
+
+Second, in newer kernels the ZONE_DEVICE feature allows persistent memory
+devices to describe their pages with a page struct, allowing for example
+for a get_user_pages() call from the RDMA stack to succeed. However, the
+current ZONE_DEVICE code only supports devices whose memory can be cached
+by the CPU, and patches to change that [5] has been rejected so far.
+
+A third, more long term alternative is to use HMM [6]. HMM allows migrating
+anonymous memory to a device. It could possibly be extended to allow
+requesting a mapping for peer-to-peer access from another device. However,
+HMM is complex and it could take a long time until it is accepted.
+
+This patch series attempts to use the existing DMA-BUF mechanism in the
+kernel to provide peer-to-peer transaction support for RDMA devices.
+DMA-BUF allows one device to attach to a buffer exported by another device.
+The series allows an RDMA application to use a new kernel API to create an
+RDMA memory region from a DMA-BUF file descriptor handle. The DMA-BUF
+object is pinned via the dma_buf_attach() call, and the code then uses
+dma_buf_map_attachment to get the mapping to the buffer and registers them
+with the RDMA device.
+
+In order to provide an example use of the series, I've added DMA-BUF
+support to the NVMe driver. The code adds a ioctl to allocate CMB regions
+as DMA-BUF objects. These objects can then be used to register a memory
+region with the new API.
+
+The series is structured as follows. The first two patches are preliminary
+patches needed for the mlx5_ib driver. They make it easier for the
+following patches to post a memory registration request using existing
+infrastructure. Patches 3-4 implement helper functions for DMA-BUF
+registration in the RDMA subsystem core, and expose a user-space command to
+do the registration. Patch 5 implements the new registration command in the
+mlx5_ib driver. Finally patches 6-7 add DMA-BUF support to the NVMe driver.
+
+Caveats:
+* Without having real NVMe device with CMB support I smoke-tested the
+patches with qemu-nvme [7] while assigning a Connect-IB card to the VM.
+Naturally this doesn't work. It remains to be tested with real devices on
+a system supporting peer to peer.
+* GPU devices sometimes require either changing the addresses exposed on
+their BARs, or just invalidating them altogether. DMA-BUF however doesn't
+have such a mechanism right now, since it assumes cross device accesses
+will be short. DMA-BUF would need to be extended with a way to invalidate
+an existing attachment and the RDMA stack would need a way to invalidate
+existing MRs, similarly to what was done in [3,4].
+* It is currently the responsibility of the DMA-BUF exporting code to make
+sure the buffer can be mapped for access by the attaching device. It is
+not always possible to do that (e.g. when the PCIe topology does not allow
+it) or the IOMMU needs to be configured accordingly.
+* The scatterlists returned from DMA-BUF in this implementation do not have
+a struct page set. This is fine for RDMA as it only needs the DMA
+addresses. However, it may cause issues if someone tries to import these
+DMA-BUF objects into a driver that tries to use these page structs.
+
+Comments are welcome.
+
+Haggai
+
+0.1 RDMA: Add dma-buf support
+
+This patch set adds dma-buf importer role to the RDMA driver and thus
+provides a non-proprietary approach for supporting RDMA to/from buffers
+allocated from device local memory (e.g. GPU VRAM). 
+
+Dma-buf is a standard mechanism in Linux kernel for sharing buffers
+among different device drivers. It is supported by mainstream GPU
+drivers. By using ioctl calls over the devices under /dev/dri/, user
+space applications can allocate and export GPU buffers as dma-buf
+objetcs with associated file descriptors.
+
+In order to use the exported GPU buffer for RDMA operations, the RDMA
+driver needs to be able to import dma-buf objects. This happens at the
+time of memory registration. A GPU buffer is registered as a special
+type of user space memory region with the dma-buf file descriptor as
+an extra parameter. The uverbs API needs to be extended to allow the
+extra parameter be passed from user space to kernel.
+
+Vendor RDMA drivers need to be modified in order to take advantage of
+the new feature. A patch for the mlx5 driver is provided as an example.
+
+Related user space RDMA library changes will be provided as a separate
+patch set.
+
+0.2  Add user space dma-buf support
+
+This is the user space counter-part of the kernel patch set to add
+dma-buf support to the RDMA subsystem. This patch series adds user
+space API for registering dma-buf based memory regions, updates
+pyverbs with the new API, and adds new tests.
+
+This series consists of five patches. The first patch adds the new API
+function and updates the man pages. Patch 2 implements the new API in
+the mlx5 provider. Patch 3 adds new class definitions to pyverbs for
+the new API. Patch 4 adds new tests for the new API. Patch 5 fixes bug
+in the utility code of the tests.
+
+0.3 Add p2p via dmabuf to habanalabs
+
+habanalabs: define uAPI to export FD for DMA-BUF
+
+User process might want to share the device memory with another
+driver/device, and to allow it to access it over PCIe (P2P).
+
+To enable this, we utilize the dma-buf mechanism and add a dma-buf
+exporter support, so the other driver can import the device memory and
+access it.
+
+The device memory is allocated using our existing allocation uAPI,
+where the user will get a handle that represents the allocation.
+
+The user will then need to call the new
+uAPI (HL_MEM_OP_EXPORT_DMABUF_FD) and give the handle as a parameter.
+
+The driver will return a FD that represents the DMA-BUF object that
+was created to match that allocation.
+
+habanalabs: add support for dma-buf exporter
+
+Implement the calls to the dma-buf kernel api to create a dma-buf
+object backed by FD.
+
+We block the option to mmap the DMA-BUF object because we don't support
+DIRECT_IO and implicit P2P. We only implement support for explicit P2P
+through importing the FD of the DMA-BUF.
+
+In the export phase, we provide to the DMA-BUF object an array of pages
+that represent the device's memory area. During the map callback,
+we convert the array of pages into an SGT. We split/merge the pages
+according to the dma max segment size of the importer.
+
+To get the DMA address of the PCI bar, we use the dma_map_resources()
+kernel API, because our device memory is not backed by page struct
+and this API doesn't need page struct to map the physical address to
+a DMA address.
+
+We set the orig_nents member of the SGT to be 0, to indicate to other
+drivers that we don't support CPU mappings.
+
+Note that in Habanalabs's ASICs, the device memory is pinned and
+immutable. Therefore, there is no need for dynamic mappings and pinning
+callbacks.
+
+Also note that in GAUDI we don't have an MMU towards the device memory
+and the user works on physical addresses. Therefore, the user doesn't
+pass through the kernel driver to allocate memory there. As a result,
+only for GAUDI we receive from the user a device memory physical address
+(instead of a handle) and a size.
+
+We check the p2p distance using pci_p2pdma_distance_many() and refusing
+to map dmabuf in case the distance doesn't allow p2p.
+
+1. Make use of non-dynamic dmabuf in RDMA
+
+Currently, the RDMA subsystem can only work with dynamic dmabuf
+attachments, which requires the RDMA device to support on-demand-paging
+(ODP) which is not common on most devices (only supported by mlx5).
+
+While the dynamic requirement makes sense for certain GPUs, some devices
+(such as habanalabs) have device memory that is always "pinned" and do
+not need/use the move_notify operation.
+
+The motivation of this RFC is to use habanalabs as the dmabuf exporter,
+and EFA as the importer to allow for peer2peer access through libibverbs.
+
+This draft patch changes the dmabuf driver to differentiate between
+static/dynamic attachments by looking at the move_notify op instead of
+the importer_ops struct, and allowing the peer2peer flag to be enabled
+in case of a static exporter.
+
+1.1 EFA dmabuf memory regions
+
+This is a followup to my previous RFCs [1][2], which now adds a new api
+to the RDMA subsystem that allows drivers to get a pinned dmabuf memory
+region without requiring an implementation of the move_notify callback.
+The new api makes use of the dynamic attachment api implemented in the
+RDMA subsystem, but calls dma_buf_pin() in order to make sure that the
+callback will not be called, as suggested by Christian.
+
+As explained in the previous RFC, move_notify requires the RDMA device
+to support on-demand-paging (ODP) which is not common on most devices
+(only supported by mlx5).
+
+While the dynamic requirement makes sense for certain GPUs, some devices
+(such as habanalabs) have device memory that is always "pinned" and do
+not need/use the move_notify operation.
+
+Patch #1 changes the dmabuf documentation to make it clear that pinning
+does not necessarily mean the memory must be moved to system memory, it
+is up to the exporter to decide.
+Patch #2 adds the RDMA api that allows drivers to get pinned dmabuf
+memory regions.
+Patch #3 adds the EFA implementation of the dmabuf importer.
+
+The motivation of this submission is to use habanalabs as the dmabuf
+exporter, and EFA as the importer to allow for peer2peer access through
+libibverbs.
+
+[1] https://lore.kernel.org/linux-rdma/20210818074352.29950-1-galpress@amazon.com/
+[2] https://lore.kernel.org/linux-rdma/20211007104301.76693-1-galpress@amazon.com/
+
+1.2 Allow MMIO regions to be exported through dma-buf
+
+dma-buf has become a way to safely acquire a handle to non-struct page
+memory that can still have lifetime controlled by the exporter. Notably
+RDMA can now import dma-buf FDs and build them into MRs which allows for
+PCI P2P operations. Extend this to allow vfio-pci to export MMIO memory
+from PCI device BARs.
+
+This series supports a use case for SPDK where a NVMe device will be owned
+by SPDK through VFIO but interacting with a RDMA device. The RDMA device
+may directly access the NVMe CMB or directly manipulate the NVMe device's
+doorbell using PCI P2P.
+
+However, as a general mechanism, it can support many other scenarios with
+VFIO. I imagine this dmabuf approach to be usable by iommufd as well for
+generic and safe P2P mappings.
+
+This series goes after the "Break up ioctl dispatch functions to one
+function per ioctl" series.
+
+This is on github: https://github.com/jgunthorpe/linux/commits/vfio_dma_buf
+
+1.3 vfio/pci: Allow MMIO regions to be exported through dma-buf
+
+This is an attempt to revive the patches posted by Jason Gunthorpe at:
+https://patchwork.kernel.org/project/linux-media/cover/0-v2-472615b3877e+28f7-vfio_dma_buf_jgg@nvidia.com/
+
+Here is the cover letter text from Jason's original series:
+"dma-buf has become a way to safely acquire a handle to non-struct page
+memory that can still have lifetime controlled by the exporter. Notably
+RDMA can now import dma-buf FDs and build them into MRs which allows for
+PCI P2P operations. Extend this to allow vfio-pci to export MMIO memory
+from PCI device BARs.
+
+This series supports a use case for SPDK where a NVMe device will be owned
+by SPDK through VFIO but interacting with a RDMA device. The RDMA device
+may directly access the NVMe CMB or directly manipulate the NVMe device's
+doorbell using PCI P2P.
+
+However, as a general mechanism, it can support many other scenarios with
+VFIO. I imagine this dmabuf approach to be usable by iommufd as well for
+generic and safe P2P mappings.
+
+This series goes after the "Break up ioctl dispatch functions to one
+function per ioctl" series."
+
+In addition to the SPDK use-case mentioned above, the capability added
+in this patch series can also be useful when a buffer (located in device
+memory such as VRAM) needs to be shared between any two GPU devices or
+instances (assuming one of them is bound to VFIO PCI) as long as they
+are P2P DMA compatible.
+
+The main difference between this series and the original one is the usage
+of P2P DMA APIs to create struct pages (ZONE_DEVICE) to populate the
+scatterlist instead of using DMA addresses. Other additions include a
+mmap handler to provide CPU access to the dmabuf and support for
+creating the dmabuf from multiple areas (or ranges).
+
+This series is available at:
+https://gitlab.freedesktop.org/Vivek/drm-tip/-/commits/vfio_dmabuf_v1
+
+along with additional patches for Qemu and Spice here:
+https://gitlab.freedesktop.org/Vivek/qemu/-/commits/vfio_dmabuf_1
+https://gitlab.freedesktop.org/Vivek/spice/-/commits/encode_dmabuf_v4 
+
+This series is tested using the following method:
+- Run Qemu with the following relevant options:
+  qemu-system-x86_64 -m 4096m ....
+  -device vfio-pci,host=0000:03:00.0
+  -device virtio-vga,max_outputs=1,blob=true,xres=1920,yres=1080
+  -spice port=3001,gl=on,disable-ticketing=on,preferred-codec=gstreamer:h264
+  -object memory-backend-memfd,id=mem1,size=4096M
+  -machine memory-backend=mem1 ...
+- Run upstream Weston with the following options in the Guest VM:
+  ./weston --drm-device=card1 --additional-devices=card0
+
+where card1 is a DG2 dGPU (assigned to vfio-pci) and card0 is
+virtio-gpu.
+
+1.4 RDMA/bnxt_re: Support dmabuf for CQ rings
+
+For CQs, kernel already supports pinning dmabuf based application
+memory, specified through provider attributes. Register a new devop
+for create_cq_umem() and process the umem argument. Refactor the
+existing create_cq() handler so that code is shared across both
+handlers.
+
+1.5 Optimize DMABUF mkey page size in mlx5
+
+This patch series enables the mlx5 driver to dynamically choose the
+optimal page size for a DMABUF-based memory key (mkey), rather than
+always registering with a fixed page size.
+
+Previously, DMABUF memory registration used a fixed 4K page size for
+mkeys which could lead to suboptimal performance when the underlying
+memory layout may offer better page sizes.
+
+This approach did not take advantage of larger page size capabilities
+advertised by the HCA, and the driver was not setting the proper page
+size mask in the mkey mask when performing page size changes, potentially
+leading to invalid registrations when updating to a very large pages.
+
+This series improves DMABUF performance by dynamically selecting the
+best page size for a given memory region (MR) both at creation time and
+on page fault occurrences, based on the underlying layout and fixing
+related gaps and bugs.
+
+By doing so, we reduce the number of page table entries (and thus MTT/
+KSM descriptors) that the HCA must traverse, which in turn reduces
+cache-line fetches.
+
+1.6 RDMA/mlx5: Add DMAH support for reg_user_mr/reg_user_dmabuf_mr
+
+As part of this enhancement, allow the creation of an MKEY associated
+with a DMA handle.
+
+Additional notes:
+
+MKEYs with TPH (i.e. TLP Processing Hints) attributes are currently not
+UMR-capable unless explicitly enabled by firmware or hardware.
+Therefore, to maintain such MKEYs in the MR cache, the TPH fields have
+been added to the rb_key structure, with a dedicated hash bucket.
+
+The ability to bypass the kernel verbs flow and create an MKEY with TPH
+attributes using DEVX has been restricted. TPH must follow the standard
+InfiniBand flow, where a DMAH is created with the appropriate security
+checks and management mechanisms in place.
+
+DMA handles are currently not supported in conjunction with On-Demand
+Paging (ODP).
+
+Re-registration of memory regions originally created with TPH attributes
+is currently not supported.
+
+1.7 RDMA/mlx5: Add support for DMABUF MR registrations with Data-direct
+
+Add support for DMABUF MR registrations with Data-direct device.
+
+Upon userspace calling to register a DMABUF MR with the data direct bit
+set, the below algorithm will be followed.
+
+1) Obtain a pinned DMABUF umem from the IB core using the user input
+parameters (FD, offset, length) and the DMA PF device.  The DMA PF
+device is needed to allow the IOMMU to enable the DMA PF to access the
+user buffer over PCI.
+
+2) Create a KSM MKEY by setting its entries according to the user buffer
+VA to IOVA mapping, with the MKEY being the data direct device-crossed
+MKEY. This KSM MKEY is umrable and will be used as part of the MR cache.
+The PD for creating it is the internal device 'data direct' kernel one.
+
+3) Create a crossing MKEY that points to the KSM MKEY using the crossing
+access mode.
+
+4) Manage the KSM MKEY by adding it to a list of 'data direct' MKEYs
+managed on the mlx5_ib device.
+
+5) Return the crossing MKEY to the user, created with its supplied PD.
+
+Upon DMA PF unbind flow, the driver will revoke the KSM entries.
+The final deregistration will occur under the hood once the application
+deregisters its MKEY.
+
+Notes:
+- This version supports only the PINNED UMEM mode, so there is no
+  dependency on ODP.
+- The IOVA supplied by the application must be system page aligned due to
+  HW translations of KSM.
+- The crossing MKEY will not be umrable or part of the MR cache, as we
+  cannot change its crossed (i.e. KSM) MKEY over UMR.
+
+2. RDMA/mlx5: Support DMABUF in umems and enable ATS
+
+This series adds support for DMABUF when creating a devx umem. devx umems
+are quite similar to MR's execpt they cannot be revoked, so this uses the
+dmabuf pinned memory flow. Several mlx5dv flows require umem and cannot
+work with MR.
+
+The intended use case is primarily for P2P transfers using dmabuf as a
+handle to the underlying PCI BAR memory from the exporter. When a PCI
+switch is present the P2P transfers can bypass the host bridge completely
+and go directly through the switch. ATS allows this bypass to function in
+more cases as translated TLPs issued after an ATS query allows the request
+redirect setting to be bypassed in the switch.
+
+Have mlx5 automatically use ATS in places where it makes sense.
+
+3. RDMA/irdma: Add support for dmabuf pin memory regions
+
+This is a followup to the EFA dmabuf[1]. Irdma driver currently does
+not support on-demand-paging(ODP). So it uses habanalabs as the
+dmabuf exporter, and irdma as the importer to allow for peer2peer
+access through libibverbs.
+
+In this commit, the function ib_umem_dmabuf_get_pinned() is used.
+This function is introduced in EFA dmabuf[1] which allows the driver
+to get a dmabuf umem which is pinned and does not require move_notify
+callback implementation. The returned umem is pinned and DMA mapped
+like standard cpu umems, and is released through ib_umem_release().
+
+[1]https://lore.kernel.org/lkml/20211007114018.GD2688930@ziepe.ca/t/
+
+4. RDMA/bnxt_re: Add dmabuf support
+
+Adding support for pinned dmabuf memory regions.
+
+This patch is dependent on my previous patch series which is not merged.
+https://lore.kernel.org/linux-rdma/1690383081-15033-1-git-send-email-selvin.xavier@broadcom.com/.
+The patch will apply cleanly only after applying the above series.
+
+The corresponding user library patch is available in the 
+pull request. https://github.com/linux-rdma/rdma-core/pull/1373
+
+5. vfio/pci: Allow export dmabuf without move_notify from importer
+
+Summary:
+Support vfio to export dmabuf to importer such as RDMA NIC that does
+not support move_notify callback, since not all RDMA driver support
+on-demand-paging (ODP).
+
+There are some use-cases such as bind accelerator that always pinned
+the device memory via vfio and export it to RDMA NIC such as EFA, BNXT_RE
+or IRDMA that does not support ODP.
+
+6. RDMA/mlx5: Add DMAH support for reg_user_mr/reg_user_dmabuf_mr
+
+As part of this enhancement, allow the creation of an MKEY associated
+with a DMA handle.
+
+Additional notes:
+
+MKEYs with TPH (i.e. TLP Processing Hints) attributes are currently not
+UMR-capable unless explicitly enabled by firmware or hardware.
+Therefore, to maintain such MKEYs in the MR cache, the TPH fields have
+been added to the rb_key structure, with a dedicated hash bucket.
+
+The ability to bypass the kernel verbs flow and create an MKEY with TPH
+attributes using DEVX has been restricted. TPH must follow the standard
+InfiniBand flow, where a DMAH is created with the appropriate security
+checks and management mechanisms in place.
+
+DMA handles are currently not supported in conjunction with On-Demand
+Paging (ODP).
+
+Re-registration of memory regions originally created with TPH attributes
+is currently not supported.
+
+7. Optimize DMABUF mkey page size in mlx5
+This patch series enables the mlx5 driver to dynamically choose the
+optimal page size for a DMABUF-based memory key (mkey), rather than
+always registering with a fixed page size.
+
+Previously, DMABUF memory registration used a fixed 4K page size for
+mkeys which could lead to suboptimal performance when the underlying
+memory layout may offer better page sizes.
+
+This approach did not take advantage of larger page size capabilities
+advertised by the HCA, and the driver was not setting the proper page
+size mask in the mkey mask when performing page size changes, potentially
+leading to invalid registrations when updating to a very large pages.
+
+This series improves DMABUF performance by dynamically selecting the
+best page size for a given memory region (MR) both at creation time and
+on page fault occurrences, based on the underlying layout and fixing
+related gaps and bugs.
+
+By doing so, we reduce the number of page table entries (and thus MTT/
+KSM descriptors) that the HCA must traverse, which in turn reduces
+cache-line fetches.
+
+8. RDMA/uverbs: Add DMABUF object type and operations
+
+A new UVERBS_OBJECT_DMABUF object type and allocation method were
+introduced.
+
+During allocation, uverbs invokes the driver to supply the
+rdma_user_mmap_entry associated with the given page offset (pgoff).
+
+Based on the returned rdma_user_mmap_entry, uverbs requests the driver
+to provide the corresponding physical-memory details as well as the
+driver’s PCI provider information.
+
+Using this information, dma_buf_export() is called; if it succeeds,
+uobj->object is set to the underlying file pointer returned by the
+dma-buf framework.
+
+The file descriptor number follows the standard uverbs allocation flow,
+but the file pointer comes from the dma-buf subsystem, including its own
+fops and private data.
+
+Because of this, alloc_begin_fd_uobject() must handle cases where
+fd_type->fops is NULL, and both alloc_commit_fd_uobject() and
+alloc_abort_fd_uobject() must account for whether filp->private_data
+exists, since it is only populated after a successful dma_buf_export().
+
+When an mmap entry is removed, uverbs iterates over its associated
+DMABUFs, marks them as revoked, and calls dma_buf_move_notify() so that
+their importers are notified.
+
+The same procedure applies during the disassociate flow; final cleanup
+occurs when the application closes the file.
+
+
+9. EFA dmabuf memory regions
+
+This is a followup to my previous RFCs [1][2], which now adds a new api
+to the RDMA subsystem that allows drivers to get a pinned dmabuf memory
+region without requiring an implementation of the move_notify callback.
+The new api makes use of the dynamic attachment api implemented in the
+RDMA subsystem, but calls dma_buf_pin() in order to make sure that the
+callback will not be called, as suggested by Christian.
+
+As explained in the previous RFC, move_notify requires the RDMA device
+to support on-demand-paging (ODP) which is not common on most devices
+(only supported by mlx5).
+
+While the dynamic requirement makes sense for certain GPUs, some devices
+(such as habanalabs) have device memory that is always "pinned" and do
+not need/use the move_notify operation.
+
+Patch #1 changes the dmabuf documentation to make it clear that pinning
+does not necessarily mean the memory must be moved to system memory, it
+is up to the exporter to decide.
+Patch #2 adds the RDMA api that allows drivers to get pinned dmabuf
+memory regions.
+Patch #3 adds the EFA implementation of the dmabuf importer.
+
+The motivation of this submission is to use habanalabs as the dmabuf
+exporter, and EFA as the importer to allow for peer2peer access through
+libibverbs.
+
+[1] https://lore.kernel.org/linux-rdma/20210818074352.29950-1-galpress@amazon.com/
+[2] https://lore.kernel.org/linux-rdma/20211007104301.76693-1-galpress@amazon.com/
+
+
+10. dma-buf: Use revoke mechanism to invalidate shared buffers
+
+This series documents a dma-buf “revoke” mechanism: to allow a dma-buf
+exporter to explicitly invalidate (“kill”) a shared buffer after it has
+been distributed to importers, so that further CPU and device access is
+prevented and importers reliably observe failure.
+
+The change in this series is to properly document and use existing core
+“revoked” state on the dma-buf object and a corresponding exporter-triggered
+revoke operation.
+
+dma-buf has quietly allowed calling move_notify on pinned dma-bufs, even
+though legacy importers using dma_buf_attach() would simply ignore
+these calls.
+
+The intention was that move_notify() would tell the importer to expedite
+it's unmapping process and once the importer is fully finished with DMA it
+would unmap the dma-buf which finally signals that the importer is no
+longer ever going to touch the memory again. Importers that touch past
+their unmap() call can trigger IOMMU errors, AER and beyond, however
+read-and-discard access between move_notify() and unmap is allowed.
+
+Thus, we can define the exporter's revoke sequence for pinned dma-buf as:
+
+	dma_resv_lock(dmabuf->resv, NULL);
+	// Prevent new mappings from being established
+	priv->revoked = true;
+
+	// Tell all importers to eventually unmap
+	dma_buf_invalidate_mappings(dmabuf);
+
+	// Wait for any inprogress fences on the old mapping
+	dma_resv_wait_timeout(dmabuf->resv,
+			      DMA_RESV_USAGE_BOOKKEEP, false,
+			      MAX_SCHEDULE_TIMEOUT);
+	dma_resv_unlock(dmabuf->resv, NULL);
+
+	// Wait for all importers to complete unmap
+	wait_for_completion(&priv->unmapp_comp);
+
+However, dma-buf also supports importers that don't do anything on
+move_notify(), and will not unmap the buffer in bounded time.
+
+Since such importers would cause the above sequence to hang, a new
+mechanism is needed to detect incompatible importers.
+
+Introduce dma_buf_attach_revocable() which if true indicates the above
+sequence is safe to use and will complete in kernel-only bounded time for
+this attachment.
+
+Unfortunately dma_buf_attach_revocable() is going to fail for the popular
+RDMA pinned importer, which means we cannot introduce it to existing
+places using pinned move_notify() without potentially breaking existing
+userspace flows.
+
+Existing exporters that only trigger this flow for RAS errors should not
+call dma_buf_attach_revocable() and will suffer an unbounded block on the
+final completion, hoping that the userspace will notice the RAS and clean
+things up. Without revoke support on the RDMA pinned importers it doesn't
+seem like any other non-breaking option is currently possible.
+
+For new exporters, like VFIO and RDMA, that have userspace triggered
+revoke events, the unbouned sleep would not be acceptable. They can call
+dma_buf_attach_revocable() and will not work with the RDMA pinned importer
+from day 0, preventing regressions.
+
+In the process add documentation explaining the above details.
+
+11. Retrieve tph from dmabuf for PCIe P2P memory access
+
+Currently, the steering tag can be used for a CPU on the motherboard; the
+ACPI check is in place to query and obtain the supported tph settings. Here
+we intend to use the tph info to improve RDMA NIC memory access on a vfio-based
+accelerator device via PCIe peer-to-peer. When an applicantion register a
+RDMA memory region with DMABUF for the RDMA NIC to access the device memory,
+the tph associated with the memory region can be retrieved and used to set the
+steering tag / process hint (ph). The tph contains additional instructions
+or hints to the GPU or accelerator device for advanced memory operations,
+such as, read cache selection.
+
+Zhiping Zhang <zhipingz@meta.com>
+
+12. RDMA: Add support for exporting dma-buf file descriptors
+
+This patch series introduces dma-buf export support for RDMA/InfiniBand
+devices, enabling userspace applications to export RDMA PCI-backed
+memory regions (such as device memory or mlx5 UAR pages) as dma-buf file
+descriptors.
+
+This allows PCI device memory to be shared with other kernel subsystems
+(e.g., graphics or media) or between userspace processes, via the 
+standard dma-buf interface, avoiding unnecessary copies and enabling
+efficient peer-to-peer (P2P) DMA transfers. See [1] for background on
+dma-buf.
+
+As part of this series, we introduce a new uverbs object of type FD for 
+dma-buf export, along with the corresponding APIs for allocation and 
+teardown. This object encapsulates all attributes required to export a
+dma-buf.
+
+The implementation enforces P2P-only mappings and properly manages
+resource lifecycle, including:
+- Cleanup during driver removal or RDMA context destruction.
+- Revocation via dma_buf_move_notify() when the underlying mmap entries
+  are removed.
+- Refactors common cleanup logic for reuse across FD uobject types.
+
+The infrastructure is generic within uverbs, allowing individual drivers
+to easily integrate and supply their vendor-specific implementation.
+
+The mlx5 driver is the first consumer of this new API, providing:
+- Initialization of PCI peer-to-peer DMA support.
+- mlx5-specific implementations of the mmap_get_pfns and 
+  pgoff_to_mmap_entry device operations required for dma-buf export.
