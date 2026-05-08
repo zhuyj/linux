@@ -104,8 +104,22 @@ static netdev_tx_t netkit_xmit(struct sk_buff *skb, struct net_device *dev)
 	peer = rcu_dereference(nk->peer);
 	if (unlikely(!peer || !(peer->flags & IFF_UP) ||
 		     !pskb_may_pull(skb, ETH_HLEN) ||
-		     skb_orphan_frags(skb, GFP_ATOMIC)))
+		     skb_orphan_frags(skb, GFP_ATOMIC))) {
+		if (!peer)
+			pr_warn("%s +%d %s dropped, !peer\n", __FILE__, __LINE__, __func__);
+
+		if (!(peer->flags & IFF_UP))
+			pr_warn("%s +%d %s dropped, !(peer->flags & IFF_UP)\n", __FILE__, __LINE__, __func__);
+
+		if (!pskb_may_pull(skb, ETH_HLEN))
+			pr_warn("%s +%d %s dropped, !pskb_may_pull(skb, ETH_HLEN)\n", __FILE__, __LINE__, __func__);
+
+		if (skb_orphan_frags(skb, GFP_ATOMIC))
+			pr_warn("%s +%d %s dropped, skb_orphan_frags(skb, GFP_ATOMIC)\n", __FILE__, __LINE__, __func__);
+
 		goto drop;
+	}
+
 	netkit_prep_forward(skb, !net_eq(dev_net(dev), dev_net(peer)),
 			    nk->scrub);
 	eth_skb_pkt_type(skb, peer);
@@ -113,6 +127,9 @@ static netdev_tx_t netkit_xmit(struct sk_buff *skb, struct net_device *dev)
 	entry = rcu_dereference(nk->active);
 	if (entry)
 		ret = netkit_run(entry, skb, ret);
+
+	ret = NETKIT_PASS;
+
 	switch (ret) {
 	case NETKIT_NEXT:
 	case NETKIT_PASS:
@@ -122,16 +139,19 @@ static netdev_tx_t netkit_xmit(struct sk_buff *skb, struct net_device *dev)
 			dev_sw_netstats_tx_add(dev, 1, len);
 			dev_sw_netstats_rx_add(peer, len);
 		} else {
+			pr_warn("%s +%d %s dropped\n", __FILE__, __LINE__, __func__);
 			goto drop_stats;
 		}
 		break;
 	case NETKIT_REDIRECT:
+		pr_warn("%s +%d %s redirect skb to %s\n", __FILE__, __LINE__, __func__, dev->name);
 		dev_sw_netstats_tx_add(dev, 1, len);
 		skb_do_redirect(skb);
 		break;
 	case NETKIT_DROP:
 	default:
 drop:
+		pr_err("%s +%d %s drop skb\n", __FILE__, __LINE__, __func__);
 		kfree_skb(skb);
 drop_stats:
 		dev_core_stats_tx_dropped_inc(dev);
