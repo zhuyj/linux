@@ -3,7 +3,7 @@
 #include <sys/resource.h>
 #include <bpf/libbpf.h>
 #include <net/if.h>
-#include "user_skeleton.h"
+#include "rxe_pkg_kernel.skel.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -33,13 +33,6 @@ typedef __u8 u8;
 typedef __u16 u16;
 typedef __u32 u32;
 typedef __u64 u64;
-//static int if_idx;
-//static char *if_name;
-//static __u32 xdp_flags = XDP_FLAGS_UPDATE_IF_NOEXIST;
-//static __u32 prog_id;
-//static struct perf_buffer *pb = NULL;
-
-//#define SAMPLE_SIZE	4096ul
 #include <arpa/inet.h>
 struct rxe_bth {
 	__u8		opcode;
@@ -1235,18 +1228,12 @@ static void print_bpf_output(void *data, __u32 size)
 }
 
 static int handle_event(void *ctx, void *data, long unsigned int data_sz) {
-    unsigned char *packet = data;
-    printf("recv: %lu\n", data_sz);
-//    for (int i = 0; i < (data_sz < 16 ? data_sz : 16); i++) {
-//        printf("%02x ", packet[i]);
-//    }
-//    printf("\n");
-print_bpf_output(data+14, data_sz-14);
-    return 0;
+	print_bpf_output(data+14, data_sz-14);
+	return 0;
 }
 
 int main() {
-    struct dump *skel;
+    struct rxe_pkg_kernel_dump *skel;
     int err;
     struct ring_buffer *ringbuf = NULL;
     struct rlimit rlim = { .rlim_cur = RLIM_INFINITY, .rlim_max = RLIM_INFINITY };
@@ -1255,7 +1242,7 @@ int main() {
         return 1;
     }
 
-    skel = dump__open_and_load();
+    skel = rxe_pkg_kernel_dump__open_and_load();
     if (!skel) {
         fprintf(stderr, "Failed to open and load BPF skeleton\n");
         return 1;
@@ -1275,7 +1262,7 @@ int main() {
         goto cleanup;
     }
 
-    err = dump__attach(skel);
+    err = rxe_pkg_kernel_dump__attach(skel);
     if (err) {
         fprintf(stderr, "Failed to attach BPF skeleton\n");
         goto cleanup;
@@ -1283,8 +1270,6 @@ int main() {
 
     ringbuf = ring_buffer__new(bpf_map__fd(skel->maps.rb),
                           handle_event, NULL, NULL);
-
-//    printf("正在监听网络事件... 按 Ctrl+C 退出\n");
 
     while (1) {
         err = ring_buffer__poll(ringbuf, 100 /* timeout */);
@@ -1296,6 +1281,6 @@ int main() {
 
 cleanup:
     ring_buffer__free(ringbuf);
-    dump__destroy(skel);
+    rxe_pkg_kernel_dump__destroy(skel);
     return 0;
 }

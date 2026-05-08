@@ -1,6 +1,6 @@
 #!/bin/sh
 
-CUR_WD=`pwd`/tools/testing/selftests/rdma/
+CUR_WD=`pwd`
 
 echo > /sys/kernel/debug/tracing/trace
 ip netns delete ns0
@@ -8,9 +8,9 @@ ip netns add ns0
 
 ip link delete nk1
 
-clang -O2 -g -target bpf -c $CUR_WD/rxe_pkg_kernel_dump.c -o $CUR_WD/dump.o
-bpftool gen skeleton $CUR_WD/dump.o > $CUR_WD/user_skeleton.h
-gcc -o $CUR_WD/u_dump $CUR_WD/rxe_pkg_user_dump.c -lbpf -lelf -lz
+# clang -O2 -g -target bpf -c $CUR_WD/rxe_pkg_kernel_dump.c -o $CUR_WD/dump.o
+# bpftool gen skeleton $CUR_WD/dump.o > $CUR_WD/user_skeleton.h
+# gcc -o $CUR_WD/u_dump $CUR_WD/rxe_pkg_user_dump.c -lbpf -lelf -lz
 
 #ip link add nk1 type netkit
 ip link add nk0 type netkit mode l2 peer name nk1
@@ -36,7 +36,7 @@ ip addr add 10.0.0.2/24 dev nk1
 #mkdir -p /sys/fs/bpf/netkit
 #bpftool prog load dump.o /sys/fs/bpf/netkit/netkit_dump 
 #bpftool net attach tcx_ingress name handle_netkit_ingress dev nk1
-$CUR_WD/u_dump &
+$CUR_WD/rxe_netkit_dump &
 
 sleep 3
 #bpftool prog load dump.bpf.o /sys/fs/bpf/netkit/netkit_dump
@@ -78,6 +78,6 @@ ip netns delete ns0
 
 cat /sys/kernel/debug/tracing/trace
 
-killall -9 u_dump
+killall -9 rxe_pkg_kernel_dump 
 
-rm -f $CUR_WD/dump.o  $CUR_WD/u_dump  $CUR_WD/user_skeleton.h
+# rm -f $CUR_WD/dump.o  $CUR_WD/u_dump  $CUR_WD/user_skeleton.h
