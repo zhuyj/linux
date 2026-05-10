@@ -1,25 +1,6 @@
-#include <stdio.h>
-#include <unistd.h>
 #include <sys/resource.h>
-#include <bpf/libbpf.h>
 #include <net/if.h>
 #include "rxe_pkg_kernel.skel.h"
-
-#include <stdlib.h>
-#include <string.h>
-#include <linux/perf_event.h>
-#include <linux/bpf.h>
-#include <net/if.h>
-#include <errno.h>
-#include <assert.h>
-#include <sys/sysinfo.h>
-#include <sys/ioctl.h>
-#include <signal.h>
-#include <bpf/libbpf.h>
-#include <bpf/bpf.h>
-#include <sys/resource.h>
-#include <libgen.h>
-#include <linux/if_link.h>
 
 #include <linux/ip.h>
 #include <linux/udp.h>
@@ -1229,7 +1210,8 @@ static void print_bpf_output(void *data, __u32 size)
 }
 
 static int handle_event(void *ctx, void *data, long unsigned int data_sz) {
-	print_bpf_output(data+sizeof(struct ethhdr), data_sz-sizeof(struct ethhdr));
+	print_bpf_output(data+sizeof(struct ethhdr),
+			 data_sz-sizeof(struct ethhdr));
 	return 0;
 }
 
@@ -1270,7 +1252,7 @@ int main() {
 	}
 
 	ringbuf = ring_buffer__new(bpf_map__fd(skel->maps.rb),
-			handle_event, NULL, NULL);
+				   handle_event, NULL, NULL);
 
 	while (1) {
 		err = ring_buffer__poll(ringbuf, 100 /* timeout */);
