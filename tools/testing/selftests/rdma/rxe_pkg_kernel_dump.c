@@ -29,21 +29,23 @@ int handle_netkit_ingress(struct __sk_buff *skb) {
 			__u32 len = skb->len;
 			len &= 0x1FF;
 			if (len == 0) {
-				bpf_printk("%s +%d\n", __FILE__, __LINE__);
+				bpf_printk("len is 0\n");
 				return BPF_OK;
 			}
-			__u32 copy_len = len;
 
-                        void *sample = bpf_ringbuf_reserve(&rb, 512, 0);
-                        if (!sample) return BPF_OK;
+			void *reserve = bpf_ringbuf_reserve(&rb, 512, 0);
+			if (!reserve) {
+				bpf_printk("bpf_ringbuf_reserve fails\n");
+				return BPF_OK;
+			}
 
-                        if (bpf_skb_load_bytes(skb, 0, sample, copy_len) < 0) {
-                          bpf_ringbuf_discard(sample, 0);
-			bpf_printk("%s +%d\n", __FILE__, __LINE__);
-                          return BPF_OK;
-                        }
+			if (bpf_skb_load_bytes(skb, 0, reserve, len) < 0) {
+				bpf_ringbuf_discard(reserve, 0);
+				bpf_printk("bpf_skb_load_bytes fails\n");
+				return BPF_OK;
+			}
 
-                        bpf_ringbuf_submit(sample, 0);
+			bpf_ringbuf_submit(reserve, 0);
 		}
 	}
 
