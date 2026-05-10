@@ -3,10 +3,10 @@
 CUR_WD=`pwd`
 
 echo > /sys/kernel/debug/tracing/trace
-ip netns delete ns0
+# ip netns delete ns0
 ip netns add ns0
 
-ip link delete nk1
+# ip link delete nk1
 
 # clang -O2 -g -target bpf -c $CUR_WD/rxe_pkg_kernel_dump.c -o $CUR_WD/dump.o
 # bpftool gen skeleton $CUR_WD/dump.o > $CUR_WD/user_skeleton.h
@@ -18,7 +18,7 @@ ip link add nk0 type netkit mode l2 peer name nk1
 ip link set nk0 up
 ip link set nk1 up
 
-ip link
+# ip -s link
 
 ip link set nk0 netns ns0
 ip netns exec ns0 ip addr add 10.0.0.1/24 dev nk0
@@ -46,9 +46,9 @@ sleep 3
 # bpftool prog show
 # bpftool net list
 
-ip -4 a
-ip l
-#sleep 3
+# ip -4 a
+# ip l
+# sleep 3
 # ping -c 3 10.0.0.1 -I nk1
 
 ip netns exec ns0 rdma link add rxe0 type rxe netdev nk0
