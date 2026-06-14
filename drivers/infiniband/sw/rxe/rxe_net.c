@@ -103,6 +103,7 @@ static inline void rxe_reclassify_recv_socket(struct socket *sock)
 #endif /* CONFIG_DEBUG_LOCK_ALLOC */
 }
 
+#if !IS_ENABLED(CONFIG_RDMA_RXE_L2)
 static struct dst_entry *rxe_find_route4(struct rxe_qp *qp,
 					 struct net *net,
 					 struct net_device *ndev,
@@ -215,6 +216,7 @@ static struct dst_entry *rxe_find_route(struct net_device *ndev,
 	}
 	return dst;
 }
+#endif /* RDMA_RXE_L2 */
 
 static int rxe_udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 {
@@ -318,7 +320,9 @@ static void prepare_ipv4_hdr(struct dst_entry *dst, struct sk_buff *skb,
 	skb_scrub_packet(skb, xnet);
 
 	skb_clear_hash(skb);
+#if !IS_ENABLED(CONFIG_RDMA_RXE_L2)
 	skb_dst_set(skb, dst_clone(dst));
+#endif /* RDMA_RXE_L2 */
 	memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
 
 	skb_push(skb, sizeof(struct iphdr));
@@ -335,8 +339,13 @@ static void prepare_ipv4_hdr(struct dst_entry *dst, struct sk_buff *skb,
 	iph->daddr	=	daddr;
 	iph->saddr	=	saddr;
 	iph->ttl	=	ttl;
+#if !IS_ENABLED(CONFIG_RDMA_RXE_L2)
 	__ip_select_ident(dev_net(dst->dev), iph,
 			  skb_shinfo(skb)->gso_segs ?: 1);
+#else
+	__ip_select_ident(dev_net(skb->dev), iph,
+			  skb_shinfo(skb)->gso_segs ?: 1);
+#endif /* RDMA_RXE_L2 */
 }
 
 static void prepare_ipv6_hdr(struct dst_entry *dst, struct sk_buff *skb,
@@ -348,8 +357,9 @@ static void prepare_ipv6_hdr(struct dst_entry *dst, struct sk_buff *skb,
 	memset(&(IPCB(skb)->opt), 0, sizeof(IPCB(skb)->opt));
 	IPCB(skb)->flags &= ~(IPSKB_XFRM_TUNNEL_SIZE | IPSKB_XFRM_TRANSFORMED
 			    | IPSKB_REROUTED);
+#if !IS_ENABLED(CONFIG_RDMA_RXE_L2)
 	skb_dst_set(skb, dst_clone(dst));
-
+#endif /* RDMA_RXE_L2 */
 	__skb_push(skb, sizeof(*ip6h));
 	skb_reset_network_header(skb);
 	ip6h		  = ipv6_hdr(skb);
@@ -366,25 +376,26 @@ static int prepare4(struct rxe_av *av, struct rxe_pkt_info *pkt,
 		    struct sk_buff *skb)
 {
 	struct rxe_qp *qp = pkt->qp;
-	struct dst_entry *dst;
+	struct dst_entry *dst = NULL;
 	bool xnet = false;
 	__be16 df = htons(IP_DF);
 	struct in_addr *saddr = &av->sgid_addr._sockaddr_in.sin_addr;
 	struct in_addr *daddr = &av->dgid_addr._sockaddr_in.sin_addr;
-
+#if !IS_ENABLED(CONFIG_RDMA_RXE_L2)
 	dst = rxe_find_route(skb->dev, qp, av);
 	if (!dst) {
 		rxe_dbg_qp(qp, "Host not reachable\n");
 		return -EHOSTUNREACH;
 	}
-
+#endif /* RDMA_RXE_L2 */
 	prepare_udp_hdr(skb, cpu_to_be16(qp->src_port),
 			cpu_to_be16(ROCE_V2_UDP_DPORT));
 
 	prepare_ipv4_hdr(dst, skb, saddr->s_addr, daddr->s_addr, IPPROTO_UDP,
 			 av->grh.traffic_class, av->grh.hop_limit, df, xnet);
-
+#if !IS_ENABLED(CONFIG_RDMA_RXE_L2)
 	dst_release(dst);
+#endif /* RDMA_RXE_L2 */
 	return 0;
 }
 
@@ -392,15 +403,17 @@ static int prepare6(struct rxe_av *av, struct rxe_pkt_info *pkt,
 		    struct sk_buff *skb)
 {
 	struct rxe_qp *qp = pkt->qp;
-	struct dst_entry *dst;
+	struct dst_entry *dst = NULL;
 	struct in6_addr *saddr = &av->sgid_addr._sockaddr_in6.sin6_addr;
 	struct in6_addr *daddr = &av->dgid_addr._sockaddr_in6.sin6_addr;
 
+#if !IS_ENABLED(CONFIG_RDMA_RXE_L2)
 	dst = rxe_find_route(skb->dev, qp, av);
 	if (!dst) {
 		rxe_dbg_qp(qp, "Host not reachable\n");
 		return -EHOSTUNREACH;
 	}
+#endif /* RDMA_RXE_L2 */
 
 	prepare_udp_hdr(skb, cpu_to_be16(qp->src_port),
 			cpu_to_be16(ROCE_V2_UDP_DPORT));
@@ -408,8 +421,9 @@ static int prepare6(struct rxe_av *av, struct rxe_pkt_info *pkt,
 	prepare_ipv6_hdr(dst, skb, saddr, daddr, IPPROTO_UDP,
 			 av->grh.traffic_class,
 			 av->grh.hop_limit);
-
+#if !IS_ENABLED(CONFIG_RDMA_RXE_L2)
 	dst_release(dst);
+#endif /* RDMA_RXE_L2 */
 	return 0;
 }
 
