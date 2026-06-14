@@ -468,12 +468,26 @@ static int rxe_send(struct sk_buff *skb, struct rxe_pkt_info *pkt)
 	rxe_get(pkt->qp);
 	atomic_inc(&pkt->qp->skb_out);
 
+#if IS_ENABLED(CONFIG_RDMA_RXE_L2)
+	if (dev_hard_header(skb, skb->dev, ETH_P_IP,
+		rxe_get_av(pkt, NULL)->dmac, skb->dev->dev_addr, skb->len)) {
+		err = dev_queue_xmit(skb);
+		return err;
+	} else {
+		pr_err("Configure L2 address error\n");
+		atomic_dec(&pkt->qp->skb_out);
+		rxe_put(pkt->qp);
+		kfree_skb(skb);
+		return -EINVAL;
+	}
+#else
 	if (skb->protocol == htons(ETH_P_IP))
 		err = ip_local_out(dev_net(skb_dst(skb)->dev), skb->sk, skb);
 	else
 		err = ip6_local_out(dev_net(skb_dst(skb)->dev), skb->sk, skb);
 
 	return err;
+#endif  /* RDMA_RXE_L2 */
 }
 
 /* fix up a send packet to match the packets
