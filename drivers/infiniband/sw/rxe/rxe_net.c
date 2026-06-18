@@ -282,7 +282,7 @@ static struct socket *rxe_setup_udp_tunnel(struct net *net, __be16 port,
 	rxe_reclassify_recv_socket(sock);
 
 	tnl_cfg.encap_type = 1;
-	tnl_cfg.encap_rcv = rxe_udp_encap_recv;
+	tnl_cfg.encap_rcv = NULL;
 
 	/* Setup UDP tunnel */
 	setup_udp_tunnel_sock(net, sock->sk, &tnl_cfg);
@@ -667,16 +667,13 @@ static rx_handler_result_t rxe_handle_frame(struct sk_buff **pskb)
 		return RX_HANDLER_PASS;
 
 	udph = udp_hdr(skb);
-	if (printk_ratelimit())
-		printk("%s +%d 0x%x\n", __FILE__, __LINE__, be16_to_cpu(udph->dest));
 
 	if (udph->dest != cpu_to_be16(ROCE_V2_UDP_DPORT))
 		return RX_HANDLER_PASS;
 
-//	rxe_rcv(skb);
-//	rxe_udp_encap_recv(NULL, skb);
+	rxe_udp_encap_recv(NULL, skb);
 
-	return RX_HANDLER_PASS;
+	return RX_HANDLER_CONSUMED;
 }
 
 static struct net_device *g_ndev;
