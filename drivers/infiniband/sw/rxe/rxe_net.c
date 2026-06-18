@@ -639,6 +639,48 @@ const char *rxe_parent_name(struct rxe_dev *rxe, unsigned int port_num)
 	return ndev_name;
 }
 
+static rx_handler_result_t rxe_handle_frame(struct sk_buff **pskb)
+{
+	struct sk_buff *skb = *pskb;
+	struct iphdr *iph;
+	struct udphdr *udph;
+
+	if (unlikely(skb->pkt_type == PACKET_LOOPBACK))
+		return RX_HANDLER_PASS;
+
+	if (!is_valid_ether_addr(eth_hdr(skb)->h_source)) {
+		kfree(skb);
+		return RX_HANDLER_CONSUMED;
+	}
+
+	skb = skb_share_check(skb, GFP_ATOMIC);
+	if (!skb)
+		return RX_HANDLER_CONSUMED;
+
+	if (eth_hdr(skb)->h_proto != cpu_to_be16(ETH_P_IP)) {
+		return RX_HANDLER_PASS;
+	}
+
+	iph = ip_hdr(skb);
+
+	if (iph->protocol != IPPROTO_UDP)
+		return RX_HANDLER_PASS;
+
+	udph = udp_hdr(skb);
+	if (printk_ratelimit())
+		printk("%s +%d 0x%x\n", __FILE__, __LINE__, be16_to_cpu(udph->dest));
+
+	if (udph->dest != cpu_to_be16(ROCE_V2_UDP_DPORT))
+		return RX_HANDLER_PASS;
+
+//	rxe_rcv(skb);
+//	rxe_udp_encap_recv(NULL, skb);
+
+	return RX_HANDLER_PASS;
+}
+
+static struct net_device *g_ndev;
+
 int rxe_net_add(const char *ibdev_name, struct net_device *ndev)
 {
 	int err;
@@ -650,11 +692,19 @@ int rxe_net_add(const char *ibdev_name, struct net_device *ndev)
 
 	ib_mark_name_assigned_by_user(&rxe->ib_dev);
 
+	g_ndev = ndev;
+
 	err = rxe_add(rxe, ndev->mtu, ibdev_name, ndev);
 	if (err) {
 		ib_dealloc_device(&rxe->ib_dev);
 		return err;
 	}
+
+	rtnl_lock();
+	err = netdev_rx_handler_register(ndev, rxe_handle_frame, rxe);
+	rtnl_unlock();
+	if (err)
+		return err;
 
 	return 0;
 }
@@ -846,6 +896,10 @@ int rxe_register_notifier(void)
 
 void rxe_net_exit(void)
 {
+	rtnl_lock();
+	netdev_rx_handler_unregister(g_ndev);
+	rtnl_unlock();
+
 	unregister_netdevice_notifier(&rxe_net_notifier);
 }
 
