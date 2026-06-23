@@ -10,6 +10,7 @@
 #include "rxe_loc.h"
 #include "rxe_net.h"
 #include "rxe_ns.h"
+#include "rxe_sysctl.h"
 
 MODULE_AUTHOR("Bob Pearson, Frank Zago, John Groves, Kamal Heib");
 MODULE_DESCRIPTION("Soft RDMA transport");
@@ -280,6 +281,11 @@ static int __init rxe_module_init(void)
 
 	rdma_link_register(&rxe_link_ops);
 
+	/* initialize the sysctl */
+	err = rxe_sysctl_init();
+	if (err)
+		return err;
+
 	pr_info("loaded\n");
 	return 0;
 
@@ -298,6 +304,8 @@ static void __exit rxe_module_exit(void)
 	rxe_destroy_wq();
 
 	rxe_namespace_exit();
+
+	rxe_sysctl_exit();
 
 	pr_info("unloaded\n");
 }
