@@ -34,9 +34,11 @@
 #ifndef RXE_SYSCTL_H
 #define RXE_SYSCTL_H
 
+#include "rxe.h"
+
 /* Destroy sysctl */
-void rxe_sysctl_exit(void);
+void rxe_sysctl_exit(struct ctl_table_header *rxe_sysctl_reg_table);
 
 /* Initialize sysctl */
-int rxe_sysctl_init(void);
+int rxe_sysctl_init(struct ctl_table_header **rxe_sysctl_reg_table, struct net *net);
 #endif /* RXE_SYSCTL_H */

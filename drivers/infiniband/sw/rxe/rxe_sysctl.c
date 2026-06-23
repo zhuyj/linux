@@ -37,8 +37,8 @@
 #include <net/net_namespace.h>
 #include "rxe_sysctl.h"
 
-static struct ctl_table_header *rxe_sysctl_reg_table;
-unsigned int rxe_sysctl_network_layer = 3;
+static int rxe_sysctl_network_layer = 3;
+
 static int two = 2;
 static int three = 3;
 
@@ -52,20 +52,19 @@ static struct ctl_table rxe_sysctl_layer_table[] = {
 		.extra1         = &two,
 		.extra2         = &three,
 	},
-	{ }
 };
 
-void rxe_sysctl_exit(void)
+void rxe_sysctl_exit(struct ctl_table_header *rxe_sysctl_reg_table)
 {
 	unregister_net_sysctl_table(rxe_sysctl_reg_table);
 }
 
-int rxe_sysctl_init(void)
+int rxe_sysctl_init(struct ctl_table_header **rxe_sysctl_reg_table, struct net *net)
 {
-	rxe_sysctl_reg_table =
-		register_net_sysctl(&init_net, "net/rxe",
+	*rxe_sysctl_reg_table =
+		register_net_sysctl(net, "net/rxe",
 				rxe_sysctl_layer_table);
-	if (!rxe_sysctl_reg_table)
+	if (!(*rxe_sysctl_reg_table))
 		return -ENOMEM;
 
 #if IS_ENABLED(CONFIG_RDMA_RXE_L2)
@@ -73,6 +72,5 @@ int rxe_sysctl_init(void)
 #else
 	rxe_sysctl_network_layer = 3;
 #endif
-
 	return 0;
 }

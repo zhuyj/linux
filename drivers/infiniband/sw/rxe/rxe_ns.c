@@ -9,6 +9,7 @@
 #include <net/udp_tunnel.h>
 
 #include "rxe_ns.h"
+#include "rxe_sysctl.h"
 
 /*
  * Per network namespace data
@@ -16,6 +17,7 @@
 struct rxe_ns_sock {
 	struct sock __rcu *rxe_sk4;
 	struct sock __rcu *rxe_sk6;
+	struct ctl_table_header *rxe_sysctl_reg_table;
 };
 
 /*
@@ -31,6 +33,12 @@ static int rxe_ns_init(struct net *net)
 	/* defer socket create in the namespace to the first
 	 * device create.
 	 */
+	struct rxe_ns_sock *ns_sk = net_generic(net, rxe_pernet_id);
+
+	/* initialize the sysctl */
+	int err = rxe_sysctl_init(&(ns_sk->rxe_sysctl_reg_table), net);
+	if (err)
+		return err;
 
 	return 0;
 }
@@ -41,6 +49,8 @@ static void rxe_ns_exit(struct net *net)
 	 */
 	struct rxe_ns_sock *ns_sk = net_generic(net, rxe_pernet_id);
 	struct sock *sk;
+
+	rxe_sysctl_exit(ns_sk->rxe_sysctl_reg_table);
 
 	rcu_read_lock();
 	sk = rcu_dereference(ns_sk->rxe_sk4);

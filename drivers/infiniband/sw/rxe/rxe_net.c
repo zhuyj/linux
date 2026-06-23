@@ -676,8 +676,6 @@ static rx_handler_result_t rxe_handle_frame(struct sk_buff **pskb)
 	return RX_HANDLER_CONSUMED;
 }
 
-static struct net_device *g_ndev;
-
 int rxe_net_add(const char *ibdev_name, struct net_device *ndev)
 {
 	int err;
@@ -689,8 +687,6 @@ int rxe_net_add(const char *ibdev_name, struct net_device *ndev)
 
 	ib_mark_name_assigned_by_user(&rxe->ib_dev);
 
-	g_ndev = ndev;
-
 	err = rxe_add(rxe, ndev->mtu, ibdev_name, ndev);
 	if (err) {
 		ib_dealloc_device(&rxe->ib_dev);
@@ -700,6 +696,7 @@ int rxe_net_add(const char *ibdev_name, struct net_device *ndev)
 	rtnl_lock();
 	err = netdev_rx_handler_register(ndev, rxe_handle_frame, rxe);
 	rtnl_unlock();
+
 	if (err)
 		return err;
 
@@ -722,6 +719,7 @@ static void rxe_sock_put(struct sock *sk,
 void rxe_net_del(struct ib_device *dev)
 {
 	struct net_device *ndev;
+	bool need_lock = false;
 	struct sock *sk;
 	struct net *net;
 
@@ -738,6 +736,16 @@ void rxe_net_del(struct ib_device *dev)
 	sk = rxe_ns_pernet_sk6(net);
 	if (sk)
 		rxe_sock_put(sk, rxe_ns_pernet_set_sk6, net);
+
+	if (!rtnl_is_locked()) {
+		need_lock = true;
+		rtnl_lock();
+	}
+
+	netdev_rx_handler_unregister(ndev);
+
+	if (need_lock)
+		rtnl_unlock();
 
 	dev_put(ndev);
 }
@@ -893,10 +901,6 @@ int rxe_register_notifier(void)
 
 void rxe_net_exit(void)
 {
-	rtnl_lock();
-	netdev_rx_handler_unregister(g_ndev);
-	rtnl_unlock();
-
 	unregister_netdevice_notifier(&rxe_net_notifier);
 }
 

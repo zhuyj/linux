@@ -246,6 +246,7 @@ static int rxe_newlink(const char *ibdev_name, struct net_device *ndev)
 		rxe_err("failed to add %s\n", ndev->name);
 		goto err;
 	}
+
 err:
 	return err;
 }
@@ -281,11 +282,6 @@ static int __init rxe_module_init(void)
 
 	rdma_link_register(&rxe_link_ops);
 
-	/* initialize the sysctl */
-	err = rxe_sysctl_init();
-	if (err)
-		return err;
-
 	pr_info("loaded\n");
 	return 0;
 
@@ -304,8 +300,6 @@ static void __exit rxe_module_exit(void)
 	rxe_destroy_wq();
 
 	rxe_namespace_exit();
-
-	rxe_sysctl_exit();
 
 	pr_info("unloaded\n");
 }
