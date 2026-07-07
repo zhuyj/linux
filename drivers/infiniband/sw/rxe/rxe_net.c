@@ -471,7 +471,10 @@ static int rxe_send(struct sk_buff *skb, struct rxe_pkt_info *pkt)
 #if IS_ENABLED(CONFIG_RDMA_RXE_L2)
 	if (dev_hard_header(skb, skb->dev, ETH_P_IP,
 		rxe_get_av(pkt, NULL)->dmac, skb->dev->dev_addr, skb->len)) {
-		err = dev_queue_xmit(skb);
+		//err = dev_queue_xmit(skb);
+		if (skb && skb->dev && skb->dev->netdev_ops) {
+			err = skb->dev->netdev_ops->ndo_start_xmit(skb, skb->dev);
+		}
 		return err;
 	} else {
 		pr_err("Configure L2 address error\n");
