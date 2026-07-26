@@ -25,6 +25,9 @@
 #include <linux/udp.h>
 #include <ctype.h>
 
+#include <net/ethernet.h>
+#include <arpa/inet.h>
+
 typedef unsigned char __u8;
 typedef short unsigned int __u16;
 typedef unsigned int __u32;
@@ -33,7 +36,7 @@ typedef __u8 u8;
 typedef __u16 u16;
 typedef __u32 u32;
 typedef __u64 u64;
-#include <arpa/inet.h>
+
 struct rxe_bth {
 	__u8		opcode;
 	__u8		flags;
@@ -1206,7 +1209,6 @@ static void print_bpf_output(void *data, __u32 size)
 
 				case	RXE_PAYLOAD:
 					printf("RXE_PAYLOAD\n");
-#if 1 
 					int len = ntohs(udp_hdr->len) - rxe_opcode[bth->opcode].length;
 					for (int j=0; j<len; j++) {
 						if (isprint(cur_p[j])) {
@@ -1216,7 +1218,6 @@ static void print_bpf_output(void *data, __u32 size)
 						}
 					}
 					printf("\n");
-#endif
 					break;
 				default:
 					break;
@@ -1228,59 +1229,59 @@ static void print_bpf_output(void *data, __u32 size)
 }
 
 static int handle_event(void *ctx, void *data, long unsigned int data_sz) {
-	print_bpf_output(data+14, data_sz-14);
+	print_bpf_output(data+sizeof(struct ethhdr), data_sz-sizeof(struct ethhdr));
 	return 0;
 }
 
 int main() {
-    struct rxe_pkg_kernel_dump *skel;
-    int err;
-    struct ring_buffer *ringbuf = NULL;
-    struct rlimit rlim = { .rlim_cur = RLIM_INFINITY, .rlim_max = RLIM_INFINITY };
-    if (setrlimit(RLIMIT_MEMLOCK, &rlim)) {
-        perror("setrlimit failed");
-        return 1;
-    }
+	struct rxe_pkg_kernel_dump *skel;
+	int err;
+	struct ring_buffer *ringbuf = NULL;
+	struct rlimit rlim = { .rlim_cur = RLIM_INFINITY, .rlim_max = RLIM_INFINITY };
+	if (setrlimit(RLIMIT_MEMLOCK, &rlim)) {
+		perror("setrlimit failed");
+		return 1;
+	}
 
-    skel = rxe_pkg_kernel_dump__open_and_load();
-    if (!skel) {
-        fprintf(stderr, "Failed to open and load BPF skeleton\n");
-        return 1;
-    }
+	skel = rxe_pkg_kernel_dump__open_and_load();
+	if (!skel) {
+		fprintf(stderr, "Failed to open and load BPF skeleton\n");
+		return 1;
+	}
 
-    int ifindex = if_nametoindex("nk1");
-    if (ifindex == 0) {
-        perror("if_nametoindex nk1 failed");
-        return 1;
-    }
+	int ifindex = if_nametoindex("nk1");
+	if (ifindex == 0) {
+		perror("if_nametoindex nk1 failed");
+		return 1;
+	}
 
-    skel->links.handle_netkit_ingress = bpf_program__attach_netkit(
-        skel->progs.handle_netkit_ingress, ifindex, NULL);
+	skel->links.handle_netkit_ingress = bpf_program__attach_netkit(
+		skel->progs.handle_netkit_ingress, ifindex, NULL);
 
-    if (!skel->links.handle_netkit_ingress) {
-        fprintf(stderr, "Failed to attach to netkit nk1\n");
-        goto cleanup;
-    }
+	if (!skel->links.handle_netkit_ingress) {
+		fprintf(stderr, "Failed to attach to netkit nk1\n");
+		goto cleanup;
+	}
 
-    err = rxe_pkg_kernel_dump__attach(skel);
-    if (err) {
-        fprintf(stderr, "Failed to attach BPF skeleton\n");
-        goto cleanup;
-    }
+	err = rxe_pkg_kernel_dump__attach(skel);
+	if (err) {
+		fprintf(stderr, "Failed to attach BPF skeleton\n");
+		goto cleanup;
+	}
 
-    ringbuf = ring_buffer__new(bpf_map__fd(skel->maps.rb),
-                          handle_event, NULL, NULL);
+	ringbuf = ring_buffer__new(bpf_map__fd(skel->maps.rb),
+			handle_event, NULL, NULL);
 
-    while (1) {
-        err = ring_buffer__poll(ringbuf, 100 /* timeout */);
-        if (err < 0 && err != -EINTR) {
-            fprintf(stderr, "poll error\n");
-            break;
-        }
-    }
+	while (1) {
+		err = ring_buffer__poll(ringbuf, 100 /* timeout */);
+		if (err < 0 && err != -EINTR) {
+			fprintf(stderr, "poll error\n");
+			break;
+		}
+	}
 
 cleanup:
-    ring_buffer__free(ringbuf);
-    rxe_pkg_kernel_dump__destroy(skel);
-    return 0;
+	ring_buffer__free(ringbuf);
+	rxe_pkg_kernel_dump__destroy(skel);
+	return 0;
 }

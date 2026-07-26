@@ -78,6 +78,6 @@ ip netns delete ns0
 
 cat /sys/kernel/debug/tracing/trace
 
-killall -9 rxe_pkg_kernel_dump 
+killall -9 rxe_netkit_dump
 
-# rm -f $CUR_WD/dump.o  $CUR_WD/u_dump  $CUR_WD/user_skeleton.h
+rm -f $CUR_WD/rxe_netkit_dump $CUR_WD/rxe_pkg_kernel_dump.o $CUR_WD/rxe_pkg_kernel.skel.h

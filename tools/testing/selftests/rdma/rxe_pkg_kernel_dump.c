@@ -4,8 +4,8 @@
 #include <linux/ip.h>
 
 struct {
-    __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 256 * 1024);/* Shared by all CPUs */
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 256 * 1024);/* Shared by all CPUs */
 } rb SEC(".maps");
 
 SEC("tcx/ingress")
