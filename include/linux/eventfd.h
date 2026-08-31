@@ -40,6 +40,9 @@ int eventfd_ctx_remove_wait_queue(struct eventfd_ctx *ctx, wait_queue_entry_t *w
 				  __u64 *cnt);
 void eventfd_ctx_do_read(struct eventfd_ctx *ctx, __u64 *cnt);
 
+int eventfd_luo_get_state(struct file *file, __u64 *count, unsigned int *flags);
+int eventfd_create(__u64 count, unsigned int flags);
+
 static inline bool eventfd_signal_allowed(void)
 {
 	return !current->in_eventfd;
