@@ -217,6 +217,110 @@ int rxe_add(struct rxe_dev *rxe, unsigned int mtu, const char *ibdev_name,
 	return rxe_register_device(rxe, ibdev_name, ndev);
 }
 
+/* For rxe_luo */
+struct rxe_luo_info {
+	char rxe_name[IB_DEVICE_NAME_MAX];
+	char ndev_name[IFNAMSIZ];
+	char ns_name[256]; /* netns name or ID */
+	unsigned long index;
+};
+
+DEFINE_XARRAY(rxe_luo_xa);
+
+/**
+ * rxe_luo_add_info - save rxe device info in rxe_luo_xa
+ * @rxe: rxe_dev device
+ *
+ * Return: success: 0，failure: error code
+ */
+static int rxe_luo_add_info(char *rxe_name, struct net_device *ndev)
+{
+	struct rxe_luo_info *info;
+	struct ib_device *ibdev;
+	struct net *net;
+	void *old;
+	int err;
+
+	if (!ndev)
+		return -EINVAL;
+
+	info = kzalloc(sizeof(*info), GFP_KERNEL);
+	if (!info)
+		return -ENOMEM;
+
+	strscpy(info->rxe_name, rxe_name, sizeof(info->rxe_name));
+
+	strscpy(info->ndev_name, ndev->name, sizeof(info->ndev_name));
+
+	net = dev_net(ndev);
+	if (net) {
+#if defined(CONFIG_NET_NS) && defined(NETNS_REFCNT_DEBUG)
+		snprintf(info->ns_name, sizeof(info->ns_name), "netns_ns_%u", net->ns.inum);
+#else
+		snprintf(info->ns_name, sizeof(info->ns_name), "ns_inum_%u", net->ns.inum);
+#endif
+	} else {
+		strscpy(info->ns_name, "unknown", sizeof(info->ns_name));
+	}
+
+	ibdev = ib_device_get_by_netdev(ndev, RDMA_DRIVER_RXE);
+	if (!ibdev) {
+		kfree(info);
+		return -ENODEV;
+	}
+
+	info->index = ibdev->index;
+	ib_device_put(ibdev);
+
+	old = xa_store(&rxe_luo_xa, info->index, info, GFP_KERNEL);
+	if (xa_is_err(old)) {
+		err = xa_err(old);
+		kfree(info);
+		pr_err("rxe_luo: Failed to store info into xarray, err = %d\n", err);
+		return err;
+	}
+
+	if (old)
+		kfree(old);
+
+	pr_info("rxe_luo: Added RXE [%s] (netdev: %s, ns: %s) at index %lu\n",
+		info->rxe_name, info->ndev_name, info->ns_name, info->index);
+
+	return 0;
+}
+
+static void luo_print_device_details(unsigned long index)
+{
+	struct rxe_luo_info *info;
+
+	rcu_read_lock();
+	info = xa_load(&rxe_luo_xa, index);
+	if (info) {
+		pr_info("LUO Query -> RXE Name: %s, NetDev: %s, NS: %s\n",
+			info->rxe_name, info->ndev_name, info->ns_name);
+	}
+	rcu_read_unlock();
+}
+
+/**
+ * rxe_luo_remove_info - remove rxe from rxe_luo_xa
+ * @ib_dev: ib_device device
+ */
+static void rxe_luo_remove_info(struct ib_device *ib_dev)
+{
+	struct rxe_luo_info *info;
+
+	if (!ib_dev)
+		return;
+
+	info = xa_erase(&rxe_luo_xa, ib_dev->index);
+	if (info) {
+		pr_info("rxe_luo: Removed info for RXE [%s] at index %lu\n",
+			info->rxe_name, info->index);
+		kfree(info);
+	}
+}
+
 static int rxe_newlink(const char *ibdev_name, struct net_device *ndev)
 {
 	struct rxe_dev *rxe;
@@ -245,12 +349,16 @@ static int rxe_newlink(const char *ibdev_name, struct net_device *ndev)
 		rxe_err("failed to add %s\n", ndev->name);
 		goto err;
 	}
+
+	err = rxe_luo_add_info(ibdev_name, ndev);
 err:
 	return err;
 }
 
 static int rxe_dellink(struct ib_device *dev)
 {
+	luo_print_device_details(dev->index);
+	rxe_luo_remove_info(dev);
 	rxe_net_del(dev);
 
 	return 0;
