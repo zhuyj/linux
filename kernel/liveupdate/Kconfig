@@ -102,4 +102,18 @@ config LIVEUPDATE_EVENTFD
 
 	  If unsure, say N.
 
+config LIVEUPDATE_RXE
+	bool "RXE Live Update Orchestrator support"
+	depends on RDMA_RXE
+	depends on LIVEUPDATE
+	help
+	  Enable Live Update Orchestrator support for RXE.
+	  This allows RXE states to be preserved and restored across kexec
+	  operations, maintaining their states values and flags.
+
+	  With this option enabled, RXE state can be handed over to a new kernel
+	  during live update operations.
+
+	  If unsure, say N.
+
 endmenu

@@ -26,4 +26,5 @@ rdma_rxe-y := \
 	rxe_mad.o \
 	rxe_ns.o
 
+obj-$(CONFIG_LIVEUPDATE_RXE) += rxe_luo.o
 rdma_rxe-$(CONFIG_INFINIBAND_ON_DEMAND_PAGING) += rxe_odp.o
