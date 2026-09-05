@@ -11,6 +11,8 @@
 #include "rxe_net.h"
 #include "rxe_ns.h"
 
+#include "rxe_luo.h"
+
 MODULE_AUTHOR("Bob Pearson, Frank Zago, John Groves, Kamal Heib");
 MODULE_DESCRIPTION("Soft RDMA transport");
 MODULE_LICENSE("Dual BSD/GPL");
@@ -217,14 +219,6 @@ int rxe_add(struct rxe_dev *rxe, unsigned int mtu, const char *ibdev_name,
 	return rxe_register_device(rxe, ibdev_name, ndev);
 }
 
-/* For rxe_luo */
-struct rxe_luo_info {
-	char rxe_name[IB_DEVICE_NAME_MAX];
-	char ndev_name[IFNAMSIZ];
-	char ns_name[256]; /* netns name or ID */
-	unsigned long index;
-};
-
 DEFINE_XARRAY(rxe_luo_xa);
 
 /**
@@ -389,9 +383,15 @@ static int __init rxe_module_init(void)
 
 	rdma_link_register(&rxe_link_ops);
 
+	err = rxe_luo_init();
+	if (err)
+		goto luo_err;
+
 	pr_info("loaded\n");
 	return 0;
 
+luo_err:
+	rdma_link_unregister(&rxe_link_ops);
 err_namespace_exit:
 	rxe_namespace_exit();
 err_destroy_wq:
@@ -401,6 +401,8 @@ err_destroy_wq:
 
 static void __exit rxe_module_exit(void)
 {
+	rxe_luo_exit();
+
 	rdma_link_unregister(&rxe_link_ops);
 	ib_unregister_driver(RDMA_DRIVER_RXE);
 	rxe_net_exit();
