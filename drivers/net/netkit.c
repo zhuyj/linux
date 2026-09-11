@@ -17,6 +17,8 @@
 #include <net/dst.h>
 #include <net/tcx.h>
 
+#include "netkit_luo.h"
+
 #define NETKIT_DRV_NAME	"netkit"
 
 #define NETKIT_NUM_RX_QUEUES_MAX  1024
@@ -519,13 +521,6 @@ static int netkit_validate(struct nlattr *tb[], struct nlattr *data[],
 		return -EADDRNOTAVAIL;
 	return 0;
 }
-
-/* For netkit_luo */
-struct netkit_luo_info {
-	char netkit_name[16];
-	char net_mode[IFNAMSIZ];
-	int index;
-};
 
 DEFINE_XARRAY(netkit_luo_xa);
 
@@ -1385,11 +1380,16 @@ static __init int netkit_mod_init(void)
 	ret = register_netdevice_notifier(&netkit_netdev_notifier);
 	if (ret)
 		rtnl_link_unregister(&netkit_link_ops);
+
+	ret = netkit_luo_init();
+
 	return ret;
 }
 
 static __exit void netkit_mod_exit(void)
 {
+	netkit_luo_exit();
+
 	unregister_netdevice_notifier(&netkit_netdev_notifier);
 	rtnl_link_unregister(&netkit_link_ops);
 }
