@@ -520,6 +520,93 @@ static int netkit_validate(struct nlattr *tb[], struct nlattr *data[],
 	return 0;
 }
 
+/* For netkit_luo */
+struct netkit_luo_info {
+	char netkit_name[16];
+	char net_mode[IFNAMSIZ];
+	int index;
+};
+
+DEFINE_XARRAY(netkit_luo_xa);
+
+/**
+ * netkit_luo_add_info - save netkit device info in netkit_luo_xa
+ * @net_mode: netkit mode, L2 or L3
+ * @ndev: net device
+ *
+ * Return: success: 0，failure: error code
+ */
+static int netkit_luo_add_info(const char *net_mode, struct net_device *dev)
+{
+	pr_warn("%s %s +%d, %d\n", __func__, __FILE__, __LINE__, dev->ifindex);
+	struct netkit_luo_info *info;
+	void *old;
+	int err;
+
+	if (!net_mode || !dev)
+		return -EINVAL;
+
+	info = kzalloc(sizeof(*info), GFP_KERNEL);
+	if (!info)
+		return -ENOMEM;
+
+	strscpy(info->netkit_name, dev->name, sizeof(info->netkit_name));
+
+	strscpy(info->net_mode, net_mode, sizeof(info->net_mode));
+
+	info->index = dev->ifindex;
+
+	old = xa_store(&netkit_luo_xa, info->index, info, GFP_KERNEL);
+	if (xa_is_err(old)) {
+		err = xa_err(old);
+		kfree(info);
+		pr_err("netkit_luo: Failed to store info into xarray, err = %d\n", err);
+		return err;
+	}
+
+	if (old)
+		kfree(old);
+
+	pr_info("netkit_luo: Added netkit [%s] (netdev mode: %s) at index %d\n",
+		info->netkit_name, info->net_mode, info->index);
+
+	return 0;
+}
+
+static void luo_print_device_details(struct net_device *dev)
+{
+	pr_warn("%s %s +%d, %d, %s\n", __func__, __FILE__, __LINE__, dev->ifindex, dev->name);
+	struct netkit_luo_info *info;
+
+	rcu_read_lock();
+	info = xa_load(&netkit_luo_xa, dev->ifindex);
+	if (info) {
+		pr_info("LUO Query -> netkit Name: %s, NetDev: %s\n",
+			info->netkit_name, info->net_mode);
+	}
+	rcu_read_unlock();
+}
+
+/**
+ * netkit_luo_remove_info - remove netkit from netkit_luo_xa
+ * @dev: net_device dev
+ */
+static void netkit_luo_remove_info(struct net_device *dev)
+{
+	pr_warn("%s %s +%d, %d, %s\n", __func__, __FILE__, __LINE__, dev->ifindex, dev->name);
+	struct netkit_luo_info *info;
+
+	if (!dev)
+		return;
+
+	info = xa_erase(&netkit_luo_xa, dev->ifindex);
+	if (info) {
+		pr_info("netkit_luo: Removed info for netkit [%s] at index %d\n",
+			info->netkit_name, info->index);
+		kfree(info);
+	}
+}
+
 static int netkit_new_link(struct net_device *dev,
 			   struct rtnl_newlink_params *params,
 			   struct netlink_ext_ack *extack)
@@ -642,6 +729,7 @@ static int netkit_new_link(struct net_device *dev,
 		nla_strscpy(dev->name, tb[IFLA_IFNAME], IFNAMSIZ);
 	else
 		strscpy(dev->name, "nk%d", IFNAMSIZ);
+
 	if (headroom)
 		dev->needed_headroom = headroom;
 	if (tailroom)
@@ -669,6 +757,10 @@ static int netkit_new_link(struct net_device *dev,
 	rcu_assign_pointer(netkit_priv(dev)->peer, peer);
 	if (peer)
 		rcu_assign_pointer(netkit_priv(peer)->peer, dev);
+
+	pr_warn("%s %s +%d, name: %s, ifindex: %d\n", __func__, __FILE__, __LINE__, dev->name, dev->ifindex);
+	netkit_luo_add_info("NETKIT_L2", dev);
+
 	return 0;
 err_configure_peer:
 	if (peer)
@@ -1067,6 +1159,10 @@ static void netkit_del_link(struct net_device *dev, struct list_head *head)
 {
 	struct netkit *nk = netkit_priv(dev);
 	struct net_device *peer = rtnl_dereference(nk->peer);
+
+	pr_warn("%s %s +%d, ifindex: %d, name: %s\n", __func__, __FILE__, __LINE__, dev->ifindex, dev->name);
+	luo_print_device_details(dev);
+	netkit_luo_remove_info(dev);
 
 	RCU_INIT_POINTER(nk->peer, NULL);
 	unregister_netdevice_queue(dev, head);
