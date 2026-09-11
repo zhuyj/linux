@@ -8,6 +8,7 @@ TEST_GEN_PROGS_EXTENDED += luo_stress_sessions
 TEST_GEN_PROGS_EXTENDED += luo_stress_files
 TEST_GEN_PROGS_EXTENDED += luo_test_eventfd
 TEST_GEN_PROGS_EXTENDED += luo_test_rxe
+TEST_GEN_PROGS_EXTENDED += luo_test_netkit
 
 TEST_FILES += do_kexec.sh
 
