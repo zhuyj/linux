@@ -23,6 +23,7 @@ obj-$(CONFIG_MDIO) += mdio.o
 obj-$(CONFIG_NET) += loopback.o
 obj-$(CONFIG_NETCONSOLE) += netconsole.o
 obj-$(CONFIG_NETKIT) += netkit.o
+obj-$(CONFIG_LIVEUPDATE_NETKIT) += netkit_luo.o
 obj-y += phy/
 obj-y += pse-pd/
 obj-y += mdio/

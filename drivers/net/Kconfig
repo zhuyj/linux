@@ -469,6 +469,20 @@ config NETKIT
 	  implement the driver's internal logic. The device can be configured
 	  to operate in L3 or L2 mode. If unsure, say N.
 
+config LIVEUPDATE_NETKIT
+	bool "NETKIT Live Update Orchestrator support"
+	depends on NETKIT
+	depends on LIVEUPDATE
+	help
+	  Enable Live Update Orchestrator support for NETKIT.
+	  This allows NETKIT states to be preserved and restored across kexec
+	  operations, maintaining their states values and flags.
+
+	  With this option enabled, NETKIT state can be handed over to a new kernel
+	  during live update operations.
+
+	  If unsure, say N.
+
 config NET_VRF
 	tristate "Virtual Routing and Forwarding (Lite)"
 	depends on IP_MULTIPLE_TABLES
