@@ -33,6 +33,8 @@
 #include <uapi/linux/dma-buf.h>
 #include <uapi/linux/magic.h>
 
+#include "dmabuf_liveupdate.h"
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/dma_buf.h>
 
@@ -1840,12 +1842,19 @@ static int __init dma_buf_init(void)
 		return PTR_ERR(dma_buf_mnt);
 
 	dma_buf_init_debugfs();
+
+	int err = dmabuf_liveupdate_init();
+	if (err)
+		return err;
+
 	return 0;
 }
 subsys_initcall(dma_buf_init);
 
 static void __exit dma_buf_deinit(void)
 {
+	dmabuf_liveupdate_cleanup();
+
 	dma_buf_uninit_debugfs();
 	kern_unmount(dma_buf_mnt);
 }
