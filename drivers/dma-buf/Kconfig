@@ -66,6 +66,17 @@ menuconfig DMABUF_HEAPS
 	  allows userspace to allocate dma-bufs that can be shared
 	  between drivers.
 
+config DMABUF_LIVEUPDATE
+	bool "DMABUF support for Live Update (EXPERIMENTAL)"
+	depends on PCI_LIVEUPDATE
+	help
+	  Support for preserving devices bound to dmabuf across a Live
+	  Update. This option should only be enabled by developers working on
+	  implementing this support. Once enough support has landed in the
+	  kernel, this option will no longer be marked EXPERIMENTAL.
+
+	  If you don't know what to do here, say N.
+
 source "drivers/dma-buf/heaps/Kconfig"
 
 endmenu
