@@ -153,7 +153,7 @@ static void check_open_vfio_device_fails(void)
 	struct iommu *iommu;
 	int ret, i;
 
-	printf("Checking open(%s) fails\n", cdev_path);
+	printf("Checking if open(%s) fails or not\n", cdev_path);
 	ret = open(cdev_path, O_RDWR);
 	VFIO_ASSERT_EQ(ret, -1);
 	VFIO_ASSERT_EQ(errno, EBUSY);
@@ -169,7 +169,7 @@ static void check_open_vfio_device_fails(void)
 		vfio_pci_group_setup(device, device_bdf);
 		vfio_container_set_iommu(device);
 
-		printf("Checking ioctl(group_fd, VFIO_GROUP_GET_DEVICE_FD, \"%s\") fails (%s)\n",
+		printf("Checking if ioctl(group_fd, VFIO_GROUP_GET_DEVICE_FD, \"%s\") fails (%s) or not\n",
 		       device_bdf, iommu_modes[i].name);
 
 		ret = ioctl(device->group_fd, VFIO_GROUP_GET_DEVICE_FD, device->bdf);
